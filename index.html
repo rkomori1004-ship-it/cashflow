@@ -316,6 +316,7 @@ header {
 .form-grid.inc-grid { grid-template-columns: 1fr 1.4fr 1.1fr 1.1fr auto; }
 .form-grid.exp-grid { grid-template-columns: 1fr 1.4fr 1.1fr 1.1fr auto; }
 .form-grid.biz-grid { grid-template-columns: 1fr 1.4fr 1.1fr 1fr 0.9fr auto; }
+.form-grid.biz-grid-acc { grid-template-columns: 1fr 1.3fr 1fr 0.9fr 0.8fr 1.1fr auto; }
 .form-grid.biz-exp-grid { grid-template-columns: 1fr 1.4fr 1.2fr 1.2fr auto; }
 .form-grid.exp-acc-grid { grid-template-columns: 1fr 1.4fr 1.1fr 1.1fr 1.1fr auto; }
 
@@ -447,8 +448,8 @@ select option { background: #0d0d35; }
   .metrics .metric:last-child { grid-column: span 2; }
   .form-grid.inc-grid, .form-grid.exp-grid, .form-grid.exp-acc-grid { grid-template-columns: 1fr 1fr; }
   .form-grid.inc-grid .add-btn, .form-grid.exp-grid .add-btn, .form-grid.exp-acc-grid .add-btn { grid-column: span 2; width: 100%; }
-  .form-grid.biz-grid { grid-template-columns: 1fr 1fr; }
-  .form-grid.biz-grid .add-btn { grid-column: span 2; width: 100%; }
+  .form-grid.biz-grid, .form-grid.biz-grid-acc { grid-template-columns: 1fr 1fr; }
+  .form-grid.biz-grid .add-btn, .form-grid.biz-grid-acc .add-btn { grid-column: span 2; width: 100%; }
   .overview-grid { grid-template-columns: 1fr; }
   .logo { font-size: 10px; }
 }
@@ -498,7 +499,7 @@ select option { background: #0d0d35; }
     <div class="metrics" id="personal-metrics"></div>
     <div class="card">
       <div class="card-title">収入を追加</div>
-      <div class="form-grid inc-grid">
+      <div class="form-grid exp-acc-grid">
         <div class="field"><label>発生日</label><input id="p-inc-date" type="date" onkeydown="if(event.key==='Enter')addEntry('personal','income')"></div>
         <div class="field"><label>内容</label><input id="p-inc-name" placeholder="給与、副業など" onkeydown="if(event.key==='Enter')addEntry('personal','income')"></div>
         <div class="field"><label>金額（円）</label><input id="p-inc-amount" type="number" placeholder="300000" onkeydown="if(event.key==='Enter')addEntry('personal','income')"></div>
@@ -506,6 +507,9 @@ select option { background: #0d0d35; }
           <select id="p-inc-cat">
             <option>給与</option><option>ボーナス</option><option>副業</option><option>利息・配当</option><option>その他収入</option>
           </select>
+        </div>
+        <div class="field"><label>入金先</label>
+          <select id="p-inc-account"></select>
         </div>
         <button class="add-btn green" onclick="addEntry('personal','income')" title="追加">+</button>
       </div>
@@ -554,7 +558,7 @@ select option { background: #0d0d35; }
     <div class="metrics" id="business-metrics"></div>
     <div class="card">
       <div class="card-title">売上を追加</div>
-      <div class="form-grid biz-grid">
+      <div class="form-grid biz-grid-acc">
         <div class="field"><label>発生日</label><input id="b-inc-date" type="date" onkeydown="if(event.key==='Enter')addEntry('business','income')"></div>
         <div class="field"><label>クライアント / 案件名</label><input id="b-inc-name" placeholder="案件名" onkeydown="if(event.key==='Enter')addEntry('business','income')"></div>
         <div class="field"><label>金額（円）</label><input id="b-inc-amount" type="number" placeholder="500000" onkeydown="if(event.key==='Enter')addEntry('business','income')"></div>
@@ -567,6 +571,9 @@ select option { background: #0d0d35; }
           <select id="b-inc-status">
             <option value="1">請求済</option><option value="0">未請求</option>
           </select>
+        </div>
+        <div class="field"><label>入金先</label>
+          <select id="b-inc-account"></select>
         </div>
         <button class="add-btn green" onclick="addEntry('business','income')" title="追加">+</button>
       </div>
@@ -1082,16 +1089,17 @@ function addEntry(mode, type) {
   if (isBiz && isInc) {
     entry.status = document.getElementById('b-inc-status').value === '1' ? '請求済' : '未請求';
   }
-  // 口座引き落とし
-  if (!isInc) {
-    const accEl = document.getElementById(`${p}-exp-account`);
-    const accId = accEl ? parseInt(accEl.value) : NaN;
-    if (accEl && !isNaN(accId)) {
-      entry.accountId = accId;
-      entry.accountName = accEl.options[accEl.selectedIndex]?.text.split('（')[0] || '';
-      const b = loadBalance();
-      const acc = b.accounts.find(a => a.id === entry.accountId);
-      if (acc) { acc.balance -= amount; saveBalance(b); }
+  // 口座への入出金
+  const accEl = document.getElementById(`${p}-${t}-account`);
+  const accId = accEl ? parseInt(accEl.value) : NaN;
+  if (accEl && !isNaN(accId)) {
+    entry.accountId = accId;
+    entry.accountName = accEl.options[accEl.selectedIndex]?.text.split('（')[0] || '';
+    const b = loadBalance();
+    const acc = b.accounts.find(a => a.id === entry.accountId);
+    if (acc) {
+      acc.balance += isInc ? amount : -amount;
+      saveBalance(b);
     }
   }
   entries.unshift(entry);
@@ -1138,11 +1146,11 @@ function getCtxEntry() {
 function ctxDelete() {
   const { mode, id } = ctxState;
   const entry = getCtxEntry();
-  // 口座引き落としがある場合は残高を戻す
-  if (entry && entry.type === 'expense' && entry.accountId) {
+  // 口座と連動している場合は残高を戻す
+  if (entry && entry.accountId) {
     const b = loadBalance();
     const acc = b.accounts.find(a => a.id === entry.accountId);
-    if (acc) { acc.balance += entry.amount; saveBalance(b); }
+    if (acc) { acc.balance += (entry.type === 'income' ? -entry.amount : entry.amount); saveBalance(b); }
   }
   const { month, year } = state[mode];
   setEntries(mode, year, month, getEntries(mode, year, month).filter(e => e.id !== id));
@@ -1195,13 +1203,13 @@ function saveEdit() {
   if (idx === -1) { closeModal(); return; }
   const entry = entries[idx];
   const newAmount = parseFloat(document.getElementById('edit-amount').value);
-  // 口座引き落とし済みのエントリは差額で残高調整
-  if (entry.type === 'expense' && entry.accountId) {
+  // 口座と連動しているエントリは差額で残高調整
+  if (entry.accountId) {
     const diff = newAmount - entry.amount;
     if (diff !== 0) {
       const b = loadBalance();
       const acc = b.accounts.find(a => a.id === entry.accountId);
-      if (acc) { acc.balance -= diff; saveBalance(b); }
+      if (acc) { acc.balance += (entry.type === 'income' ? diff : -diff); saveBalance(b); }
     }
   }
   entries[idx] = {
@@ -1633,7 +1641,7 @@ function updateAccountSelects() {
   const opts = b.accounts.length
     ? b.accounts.map(a => `<option value="${a.id}">${a.name}（${fmt(a.balance)}）</option>`).join('')
     : '<option value="" disabled>口座を登録してください</option>';
-  ['p-exp-account','b-exp-account'].forEach(id => {
+  ['p-exp-account','b-exp-account','p-inc-account','b-inc-account'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.innerHTML = opts;
   });
