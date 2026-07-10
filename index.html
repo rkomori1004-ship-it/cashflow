@@ -831,6 +831,23 @@ select option { background: #0d0d35; }
 
   <!-- バックアップ -->
   <div id="tab-backup" class="section">
+    <div class="card" style="border-color:var(--mp)">
+      <div class="card-title" style="color:var(--mp)">☁️ クラウド同期（スマホ⇔PC）</div>
+      <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px">合言葉を設定すると、同じ合言葉を入力した端末同士で自動的にデータが同期されます。合言葉は他人に教えないでください。</p>
+      <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+        <input type="password" id="sync-passphrase" placeholder="合言葉（8文字以上推奨）" style="flex:1;min-width:180px">
+        <button class="csv-btn" onclick="handleSetupSync()" style="border-color:var(--mp);color:var(--mp)">🔗 接続する</button>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <span style="font-size:12px;color:var(--text-muted)">状態:</span>
+        <span id="sync-status" style="font-size:12px;color:var(--text-hint)">未設定</span>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+        <button class="csv-btn" onclick="pullFromCloud()">⬇ クラウドから取得</button>
+        <button class="csv-btn" onclick="pushToCloud()">⬆ アップロード</button>
+        <button class="csv-btn" onclick="if(confirm('同期を解除しますか？'))disableSync()" style="border-color:var(--red);color:var(--red)">同期を解除</button>
+      </div>
+    </div>
     <div class="card">
       <div class="card-title">💾 ぼうけんのしょを　セーブする</div>
       <p style="font-size:12px;color:var(--text-muted);margin-bottom:16px">ぜんデータを　JSONファイルに　ほぞんします。べつのまちへ　たびだつときに　つかいます。</p>
@@ -2446,8 +2463,28 @@ function renderBalance() {
 }
 
 // ---- バックアップ ----
+function gatherAllLocalData() {
+  return {
+    state,
+    balance: JSON.parse(localStorage.getItem('cf-balance-v1') || 'null'),
+    budget: JSON.parse(localStorage.getItem('cf-budget-v1') || 'null'),
+    level: JSON.parse(localStorage.getItem('cf-level-v1') || 'null'),
+    unpaid: JSON.parse(localStorage.getItem('cf-unpaid-v1') || 'null'),
+    updatedAt: Date.now()
+  };
+}
+
+function applyAllLocalData(data) {
+  if (data.state) { state = data.state; saveState(); }
+  if (data.balance) localStorage.setItem('cf-balance-v1', JSON.stringify(data.balance));
+  if (data.budget) localStorage.setItem('cf-budget-v1', JSON.stringify(data.budget));
+  if (data.level) localStorage.setItem('cf-level-v1', JSON.stringify(data.level));
+  if (data.unpaid) localStorage.setItem('cf-unpaid-v1', JSON.stringify(data.unpaid));
+  renderAll();
+}
+
 function downloadBackup() {
-  const data = { state, exportedAt: new Date().toISOString(), version: 1 };
+  const data = { ...gatherAllLocalData(), exportedAt: new Date().toISOString(), version: 2 };
   const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -2466,9 +2503,7 @@ function restoreBackup() {
     try {
       const data = JSON.parse(e.target.result);
       if (!data.state || !data.state.personal || !data.state.business) throw new Error('形式が違います');
-      state = data.state;
-      saveState();
-      renderAll();
+      applyAllLocalData(data);
       msg.style.color = 'var(--green)';
       msg.textContent = '✓ 復元しました！';
     } catch(err) {
@@ -2557,6 +2592,133 @@ if ('serviceWorker' in navigator) {
       .catch(err => console.log('SW error:', err));
   });
 }
+</script>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyAMu3nclmoUz9KBo4yJWdqO7McWmXF3ieg",
+    authDomain: "casshflow-4af42.firebaseapp.com",
+    projectId: "casshflow-4af42",
+    storageBucket: "casshflow-4af42.firebasestorage.app",
+    messagingSenderId: "961279756403",
+    appId: "1:961279756403:web:038e0976f7c11f05ea4206"
+  };
+
+  const fbApp = initializeApp(firebaseConfig);
+  const db = getFirestore(fbApp);
+
+  async function hashPassphrase(pass) {
+    const enc = new TextEncoder().encode(pass);
+    const buf = await crypto.subtle.digest('SHA-256', enc);
+    return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+  }
+
+  let syncDocId = localStorage.getItem('cf-sync-docid') || null;
+
+  function updateSyncStatus(text, color) {
+    const el = document.getElementById('sync-status');
+    if (!el) return;
+    if (text) { el.textContent = text; el.style.color = color || 'var(--text-hint)'; return; }
+    if (syncDocId) {
+      const last = localStorage.getItem('cf-sync-last');
+      el.textContent = `✅ 同期ON${last ? '（最終同期: ' + new Date(parseInt(last)).toLocaleString('ja-JP') + '）' : ''}`;
+      el.style.color = 'var(--green)';
+    } else {
+      el.textContent = '未設定';
+      el.style.color = 'var(--text-hint)';
+    }
+  }
+
+  async function pushToCloud() {
+    if (!syncDocId) return;
+    updateSyncStatus('⏳ アップロード中...', 'var(--gold)');
+    try {
+      const data = window.gatherAllLocalData();
+      await setDoc(doc(db, 'cf-sync', syncDocId), data);
+      localStorage.setItem('cf-sync-last', String(Date.now()));
+      updateSyncStatus();
+    } catch (e) {
+      console.error('push error', e);
+      updateSyncStatus('❌ 同期エラー（時間をおいて再度お試しください）', 'var(--red)');
+    }
+  }
+
+  async function pullFromCloud(silent) {
+    if (!syncDocId) return;
+    updateSyncStatus('⏳ 取得中...', 'var(--gold)');
+    try {
+      const snap = await getDoc(doc(db, 'cf-sync', syncDocId));
+      if (snap.exists()) {
+        const cloud = snap.data();
+        const localData = window.gatherAllLocalData();
+        const localHasData = localData.state && (
+          Object.keys(localData.state.personal.entries || {}).length > 0 ||
+          Object.keys(localData.state.business.entries || {}).length > 0
+        );
+        if (!localHasData) {
+          window.applyAllLocalData(cloud);
+        } else if ((cloud.updatedAt || 0) > (localData.updatedAt || 0)) {
+          if (silent || confirm('クラウドの方が新しいデータがあります。この端末に反映しますか？\n（キャンセルすると、この端末のデータでクラウドを上書きします）')) {
+            window.applyAllLocalData(cloud);
+          } else {
+            await pushToCloud();
+          }
+        } else if (!silent) {
+          alert('すでに最新の状態です');
+        }
+        localStorage.setItem('cf-sync-last', String(Date.now()));
+      } else {
+        // クラウドにまだ何もなければ、ローカルをアップロード
+        await pushToCloud();
+      }
+      updateSyncStatus();
+    } catch (e) {
+      console.error('pull error', e);
+      updateSyncStatus('❌ 同期エラー（時間をおいて再度お試しください）', 'var(--red)');
+    }
+  }
+
+  let syncTimer = null;
+  function scheduleSync() {
+    if (!syncDocId) return;
+    clearTimeout(syncTimer);
+    syncTimer = setTimeout(pushToCloud, 2000);
+  }
+
+  function disableSync() {
+    localStorage.removeItem('cf-sync-docid');
+    localStorage.removeItem('cf-sync-last');
+    syncDocId = null;
+    updateSyncStatus();
+  }
+
+  // localStorageへの書き込みを監視して自動的にクラウド同期をスケジュール
+  const SYNCED_KEYS = ['cf-manager-v1', 'cf-balance-v1', 'cf-budget-v1', 'cf-level-v1', 'cf-unpaid-v1'];
+  const origSetItem = localStorage.setItem.bind(localStorage);
+  localStorage.setItem = function(key, value) {
+    origSetItem(key, value);
+    if (SYNCED_KEYS.includes(key)) scheduleSync();
+  };
+
+  window.handleSetupSync = async () => {
+    const input = document.getElementById('sync-passphrase');
+    const val = input.value.trim();
+    if (!val || val.length < 4) { alert('合言葉は4文字以上で入力してください'); return; }
+    syncDocId = await hashPassphrase(val);
+    localStorage.setItem('cf-sync-docid', syncDocId);
+    input.value = '';
+    await pullFromCloud(true);
+    alert('クラウド同期を設定しました！他の端末でも同じ合言葉を入力してください。');
+  };
+  window.pushToCloud = () => pushToCloud();
+  window.pullFromCloud = () => pullFromCloud(false);
+  window.disableSync = disableSync;
+
+  updateSyncStatus();
+  if (syncDocId) pullFromCloud(true);
 </script>
 </body>
 </html>
