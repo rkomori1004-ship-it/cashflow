@@ -318,7 +318,11 @@ header {
 .form-grid.biz-grid { grid-template-columns: 1fr 1.4fr 1.1fr 1fr 0.9fr auto; }
 .form-grid.biz-grid-acc { grid-template-columns: 1fr 1.3fr 1fr 0.9fr 0.8fr 1.1fr auto; }
 .form-grid.biz-exp-grid { grid-template-columns: 1fr 1.4fr 1.2fr 1.2fr auto; }
-.form-grid.exp-acc-grid { grid-template-columns: 1fr 1.4fr 1.1fr 1.1fr 1.1fr auto; }
+.form-grid.exp-acc-grid { grid-template-columns: 1fr 1.3fr 1fr 1fr 1fr 0.7fr auto; }
+.checkbox-field { display: flex; flex-direction: column; align-items: flex-start; }
+.checkbox-field label { margin-bottom: 6px; }
+.checkbox-field input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--green); cursor: pointer; }
+.form-grid.unpaid-grid { grid-template-columns: 1fr 1.3fr 1fr 1fr auto; gap: 8px; align-items: end; margin-bottom: 12px; }
 
 .csv-btn {
   display: flex; align-items: center; gap: 6px;
@@ -446,8 +450,8 @@ select option { background: #0d0d35; }
 @media (max-width: 600px) {
   .metrics { grid-template-columns: 1fr 1fr; }
   .metrics .metric:last-child { grid-column: span 2; }
-  .form-grid.inc-grid, .form-grid.exp-grid, .form-grid.exp-acc-grid { grid-template-columns: 1fr 1fr; }
-  .form-grid.inc-grid .add-btn, .form-grid.exp-grid .add-btn, .form-grid.exp-acc-grid .add-btn { grid-column: span 2; width: 100%; }
+  .form-grid.inc-grid, .form-grid.exp-grid, .form-grid.exp-acc-grid, .form-grid.unpaid-grid { grid-template-columns: 1fr 1fr; }
+  .form-grid.inc-grid .add-btn, .form-grid.exp-grid .add-btn, .form-grid.exp-acc-grid .add-btn, .form-grid.unpaid-grid .add-btn { grid-column: span 2; width: 100%; }
   .form-grid.biz-grid, .form-grid.biz-grid-acc { grid-template-columns: 1fr 1fr; }
   .form-grid.biz-grid .add-btn, .form-grid.biz-grid-acc .add-btn { grid-column: span 2; width: 100%; }
   .overview-grid { grid-template-columns: 1fr; }
@@ -516,7 +520,7 @@ select option { background: #0d0d35; }
       <hr class="form-divider">
       <div class="card-title">支出を追加</div>
       <div class="form-grid exp-acc-grid">
-        <div class="field"><label>発生日</label><input id="p-exp-date" type="date" onkeydown="if(event.key==='Enter')addEntry('personal','expense')"></div>
+        <div class="field"><label>発生日／支払期日</label><input id="p-exp-date" type="date" onkeydown="if(event.key==='Enter')addEntry('personal','expense')"></div>
         <div class="field"><label>内容</label><input id="p-exp-name" placeholder="家賃、食費など" onkeydown="if(event.key==='Enter')addEntry('personal','expense')"></div>
         <div class="field"><label>金額（円）</label><input id="p-exp-amount" type="number" placeholder="80000" onkeydown="if(event.key==='Enter')addEntry('personal','expense')"></div>
         <div class="field"><label>カテゴリ</label>
@@ -524,9 +528,10 @@ select option { background: #0d0d35; }
             <option>家賃・住宅費</option><option>食費</option><option>光熱費</option><option>交通費</option><option>通信費</option><option>娯楽・外食</option><option>美容・理髪</option><option>医療・保険</option><option>教育</option><option>衣類</option><option>その他</option>
           </select>
         </div>
-        <div class="field"><label>口座引き落とし</label>
+        <div class="field"><label>支払い方法</label>
           <select id="p-exp-account"></select>
         </div>
+        <div class="field checkbox-field"><label>支払済</label><input type="checkbox" id="p-exp-paid" checked></div>
         <button class="add-btn red" onclick="addEntry('personal','expense')" title="追加">+</button>
       </div>
     </div>
@@ -580,7 +585,7 @@ select option { background: #0d0d35; }
       <hr class="form-divider">
       <div class="card-title">経費を追加</div>
       <div class="form-grid exp-acc-grid">
-        <div class="field"><label>発生日</label><input id="b-exp-date" type="date" onkeydown="if(event.key==='Enter')addEntry('business','expense')"></div>
+        <div class="field"><label>発生日／支払期日</label><input id="b-exp-date" type="date" onkeydown="if(event.key==='Enter')addEntry('business','expense')"></div>
         <div class="field"><label>内容</label><input id="b-exp-name" placeholder="経費の内容" onkeydown="if(event.key==='Enter')addEntry('business','expense')"></div>
         <div class="field"><label>金額（円）</label><input id="b-exp-amount" type="number" placeholder="10000" onkeydown="if(event.key==='Enter')addEntry('business','expense')"></div>
         <div class="field"><label>カテゴリ</label>
@@ -588,9 +593,10 @@ select option { background: #0d0d35; }
             <option>通信費</option><option>ソフトウェア・SaaS</option><option>交通費</option><option>機材・備品</option><option>外注費</option><option>交際費</option><option>会議費</option><option>書籍・学習</option><option>健康投資</option><option>広告宣伝</option><option>その他経費</option>
           </select>
         </div>
-        <div class="field"><label>口座引き落とし</label>
+        <div class="field"><label>支払い方法</label>
           <select id="b-exp-account"></select>
         </div>
+        <div class="field checkbox-field"><label>支払済</label><input type="checkbox" id="b-exp-paid" checked></div>
         <button class="add-btn red" onclick="addEntry('business','expense')" title="追加">+</button>
       </div>
     </div>
@@ -624,6 +630,25 @@ select option { background: #0d0d35; }
       <div id="cf-forecast"></div>
     </div>
 
+    <!-- 未払い一覧 -->
+    <div class="card" style="border-color:var(--red)">
+      <div class="card-title" style="color:var(--red);text-shadow:1px 1px 0 #660000">⚠ 未払い一覧</div>
+      <div style="font-size:11px;color:var(--text-hint);margin-bottom:12px">クレカ・ローン・公共料金など、まだ払っていないものを手動で登録できます（過去の月分もOK）</div>
+      <div class="form-grid unpaid-grid">
+        <div class="field"><label>対象月</label><input id="unpaid-month" type="month"></div>
+        <div class="field"><label>内容</label><input id="unpaid-name" placeholder="5月分カード代など"></div>
+        <div class="field"><label>金額（円）</label><input id="unpaid-amount" type="number" placeholder="50000"></div>
+        <div class="field"><label>種類</label>
+          <select id="unpaid-cat">
+            <option>クレジットカード</option><option>ローン・借金</option><option>公共料金</option><option>その他</option>
+          </select>
+        </div>
+        <button class="add-btn red" onclick="addUnpaid()" title="追加">+</button>
+      </div>
+      <div class="entry-list" id="unpaid-list"></div>
+      <div id="unpaid-total" style="text-align:right;margin-top:10px;font-family:var(--mono);font-size:13px;color:var(--red)"></div>
+    </div>
+
     <!-- 口座残高 -->
     <div class="card">
       <div class="card-title">🏦 口座・現金残高</div>
@@ -653,9 +678,9 @@ select option { background: #0d0d35; }
     <!-- クレカ -->
     <div class="card">
       <div class="card-title">💳 クレジットカード</div>
-      <div class="form-grid" style="grid-template-columns:1.2fr 1fr 1fr 1fr 1fr auto;gap:8px;align-items:end;margin-bottom:12px">
+      <div style="font-size:11px;color:var(--text-hint);margin-bottom:10px">今月の利用額は、支出記録で「支払い方法」にこのカードを選んだ分から自動集計されます</div>
+      <div class="form-grid" style="grid-template-columns:1.2fr 1fr 1fr 1fr auto;gap:8px;align-items:end;margin-bottom:12px">
         <div class="field"><label>カード名</label><input id="cc-name" placeholder="楽天カード、三井住友など"></div>
-        <div class="field"><label>今月引き落とし額（円）</label><input id="cc-amount" type="number" placeholder="80000"></div>
         <div class="field"><label>翌月支払予定額（円）</label><input id="cc-next" type="number" placeholder="50000"></div>
         <div class="field"><label>分割残債（円）</label><input id="cc-debt" type="number" placeholder="0"></div>
         <div class="field"><label>引き落とし日</label><input id="cc-day" type="number" min="1" max="31" placeholder="27"></div>
@@ -820,6 +845,12 @@ select option { background: #0d0d35; }
     <div class="modal-field"><label>カテゴリ</label><input id="edit-cat" type="text"></div>
     <div class="modal-field" id="edit-status-wrap" style="display:none"><label>ステータス</label>
       <select id="edit-status"><option value="請求済">請求済</option><option value="未請求">未請求</option></select>
+    </div>
+    <div class="modal-field"><label id="edit-account-label">口座</label>
+      <select id="edit-account"><option value="">なし</option></select>
+    </div>
+    <div class="modal-field" id="edit-paid-wrap" style="display:none;flex-direction:row;align-items:center;gap:10px">
+      <label style="margin:0">支払済み</label><input type="checkbox" id="edit-paid" style="width:20px;height:20px;accent-color:var(--green)">
     </div>
     <div class="modal-actions">
       <button class="modal-btn cancel" onclick="closeModal()">キャンセル</button>
@@ -1023,6 +1054,91 @@ function renderLevel() {
   }
 }
 
+// ---- 未払い一覧（手動管理） ----
+function loadUnpaid() {
+  try { return JSON.parse(localStorage.getItem('cf-unpaid-v1')) || []; } catch(e) { return []; }
+}
+function saveUnpaid(list) { localStorage.setItem('cf-unpaid-v1', JSON.stringify(list)); }
+
+function addUnpaid() {
+  const monthEl = document.getElementById('unpaid-month');
+  const nameEl = document.getElementById('unpaid-name');
+  const amountEl = document.getElementById('unpaid-amount');
+  const catEl = document.getElementById('unpaid-cat');
+  const name = nameEl.value.trim();
+  const amount = parseFloat(amountEl.value);
+  const month = monthEl.value; // "YYYY-MM" 形式 or 空
+  if (!name || isNaN(amount) || amount <= 0) {
+    nameEl.style.borderColor = (!name ? 'var(--red)' : '');
+    amountEl.style.borderColor = (isNaN(amount)||amount<=0 ? 'var(--red)' : '');
+    setTimeout(() => { nameEl.style.borderColor=''; amountEl.style.borderColor=''; }, 1000);
+    return;
+  }
+  const list = loadUnpaid();
+  list.push({ id: Date.now(), name, amount, month: month || getTodayKey().slice(0,7), cat: catEl.value });
+  saveUnpaid(list);
+  monthEl.value = ''; nameEl.value = ''; amountEl.value = '';
+  renderUnpaidList();
+}
+
+function markUnpaidDone(id) {
+  const list = loadUnpaid().filter(u => u.id !== id);
+  saveUnpaid(list);
+  renderUnpaidList();
+}
+
+function markAutoUnpaidDone(mode, bucketKey, id) {
+  const arr = state[mode].entries[bucketKey] || [];
+  const idx = arr.findIndex(e => e.id === id);
+  if (idx !== -1) {
+    arr[idx].paid = true;
+    saveState();
+  }
+  renderAll();
+}
+
+function renderUnpaidList() {
+  const manual = loadUnpaid().map(u => ({
+    kind: 'manual', id: u.id, month: u.month, name: u.name, amount: u.amount, cat: u.cat
+  }));
+
+  // 支出記録で「支払済」のチェックを外したものを自動で合流
+  const auto = [];
+  ['personal','business'].forEach(mode => {
+    const buckets = state[mode].entries || {};
+    Object.entries(buckets).forEach(([bucketKey, arr]) => {
+      arr.forEach(e => {
+        if (e.type === 'expense' && e.paid === false) {
+          auto.push({
+            kind: 'auto', mode, bucketKey, id: e.id,
+            month: e.date ? e.date.slice(0,7) : bucketKey,
+            name: e.name, amount: e.amount,
+            cat: e.cardId ? 'クレジットカード' : (mode === 'business' ? '仕事の経費' : '家計の支出')
+          });
+        }
+      });
+    });
+  });
+
+  const list = [...manual, ...auto].sort((a,b) => a.month.localeCompare(b.month));
+  const listEl = document.getElementById('unpaid-list');
+  const totalEl = document.getElementById('unpaid-total');
+  if (!listEl) return;
+
+  const catIcon = { 'クレジットカード':'💳', 'ローン・借金':'📋', '公共料金':'💡', 'その他':'📝', '家計の支出':'🏠', '仕事の経費':'💼' };
+
+  listEl.innerHTML = list.length ? list.map(u => `
+    <div class="entry">
+      <span style="font-size:11px;color:var(--text-hint);font-family:var(--mono);white-space:nowrap">${u.month}</span>
+      <span class="entry-name">${catIcon[u.cat]||'📝'} ${u.name}<span class="acc-badge" style="border-color:var(--red);color:var(--red)">${u.cat}</span></span>
+      <span class="entry-amount exp">-${fmt(u.amount)}</span>
+      <button class="del-btn" onclick="${u.kind === 'manual' ? `markUnpaidDone(${u.id})` : `markAutoUnpaidDone('${u.mode}','${u.bucketKey}',${u.id})`}" title="支払い済みにする">✓</button>
+    </div>`).join('') : '<div class="empty">未払いの記録はありません</div>';
+
+  const total = list.reduce((s,u) => s + u.amount, 0);
+  totalEl.textContent = list.length ? `合計 -${fmt(total)}` : '';
+}
+
 // ---- リマインダーバナー ----
 function getTodayKey() {
   const d = new Date();
@@ -1089,23 +1205,34 @@ function addEntry(mode, type) {
   if (isBiz && isInc) {
     entry.status = document.getElementById('b-inc-status').value === '1' ? '請求済' : '未請求';
   }
-  // 口座への入出金
+  if (!isInc) {
+    const paidEl = document.getElementById(`${p}-exp-paid`);
+    entry.paid = paidEl ? paidEl.checked : true;
+  }
+  // 口座・クレカへの反映
   const accEl = document.getElementById(`${p}-${t}-account`);
-  const accId = accEl ? parseInt(accEl.value) : NaN;
-  if (accEl && !isNaN(accId)) {
+  const rawVal = accEl ? accEl.value : '';
+  if (rawVal && rawVal.startsWith('acc-')) {
+    const accId = parseInt(rawVal.slice(4));
     entry.accountId = accId;
-    entry.accountName = accEl.options[accEl.selectedIndex]?.text.split('（')[0] || '';
+    entry.accountName = accEl.options[accEl.selectedIndex]?.text.replace('🏦','').split('（')[0].trim() || '';
     const b = loadBalance();
-    const acc = b.accounts.find(a => a.id === entry.accountId);
-    if (acc) {
-      acc.balance += isInc ? amount : -amount;
-      saveBalance(b);
-    }
+    const acc = b.accounts.find(a => a.id === accId);
+    if (acc) { acc.balance += isInc ? amount : -amount; saveBalance(b); }
+  } else if (rawVal && rawVal.startsWith('card-')) {
+    const cardId = parseInt(rawVal.slice(5));
+    entry.cardId = cardId;
+    const b = loadBalance();
+    const card = (b.cards || []).find(c => c.id === cardId);
+    entry.cardName = card ? card.name : '';
+    // クレカ払いは口座残高を即時変動させない（引き落とし日に別途処理）
   }
   entries.unshift(entry);
   setEntries(mode, year, month, entries);
   awardDailyXP();
   nameEl.value = ''; amountEl.value = '';
+  const paidElReset = document.getElementById(`${p}-exp-paid`);
+  if (paidElReset) paidElReset.checked = true;
   nameEl.focus();
   renderAll();
 }
@@ -1164,7 +1291,7 @@ function ctxCopy() {
   const { mode } = ctxState;
   const { month, year } = state[mode];
   const copy = { ...entry, id: Date.now(), name: entry.name + '（コピー）' };
-  // コピー時は口座引き落としリンクは外す（残高の二重減算防止）
+  // コピー時は口座引き落としリンクは外す（残高の二重減算防止）。クレカ紐付けはそのまま維持
   delete copy.accountId; delete copy.accountName;
   const entries = getEntries(mode, year, month);
   entries.unshift(copy);
@@ -1187,6 +1314,26 @@ function ctxEdit() {
   } else {
     sw.style.display = 'none';
   }
+  // 支払い方法セレクトの初期化（収入=口座のみ、支出=口座+クレカ）
+  const b = loadBalance();
+  const accSel = document.getElementById('edit-account');
+  const accOpts = b.accounts.map(a => `<option value="acc-${a.id}">🏦 ${a.name}（${fmt(a.balance)}）</option>`).join('');
+  if (entry.type === 'income') {
+    accSel.innerHTML = '<option value="">なし</option>' + accOpts;
+  } else {
+    const cardOpts = (b.cards || []).map(c => `<option value="card-${c.id}">💳 ${c.name}</option>`).join('');
+    accSel.innerHTML = '<option value="">なし</option>' + accOpts + cardOpts;
+  }
+  accSel.value = entry.accountId ? `acc-${entry.accountId}` : (entry.cardId ? `card-${entry.cardId}` : '');
+  document.getElementById('edit-account-label').textContent = entry.type === 'income' ? '入金先' : '支払い方法';
+  // 支払済みチェックボックス（支出のみ）
+  const paidWrap = document.getElementById('edit-paid-wrap');
+  if (entry.type === 'expense') {
+    paidWrap.style.display = 'flex';
+    document.getElementById('edit-paid').checked = entry.paid !== false;
+  } else {
+    paidWrap.style.display = 'none';
+  }
   closeCtxMenu();
   document.getElementById('edit-modal').classList.add('open');
 }
@@ -1203,23 +1350,52 @@ function saveEdit() {
   if (idx === -1) { closeModal(); return; }
   const entry = entries[idx];
   const newAmount = parseFloat(document.getElementById('edit-amount').value);
-  // 口座と連動しているエントリは差額で残高調整
-  if (entry.accountId) {
-    const diff = newAmount - entry.amount;
-    if (diff !== 0) {
-      const b = loadBalance();
-      const acc = b.accounts.find(a => a.id === entry.accountId);
-      if (acc) { acc.balance += (entry.type === 'income' ? diff : -diff); saveBalance(b); }
+  const accSel = document.getElementById('edit-account');
+  const rawVal = accSel.value;
+  const newAccId = rawVal.startsWith('acc-') ? parseInt(rawVal.slice(4)) : null;
+  const newCardId = rawVal.startsWith('card-') ? parseInt(rawVal.slice(5)) : null;
+  const oldAccId = entry.accountId || null;
+  const sign = entry.type === 'income' ? 1 : -1;
+
+  // 口座残高の調整（旧口座を取り消し→新口座を反映）
+  if (oldAccId !== newAccId || newAmount !== entry.amount) {
+    const b = loadBalance();
+    if (oldAccId) {
+      const oldAcc = b.accounts.find(a => a.id === oldAccId);
+      if (oldAcc) oldAcc.balance -= sign * entry.amount; // 旧エントリの影響を取り消す
     }
+    if (newAccId) {
+      const newAcc = b.accounts.find(a => a.id === newAccId);
+      if (newAcc) newAcc.balance += sign * newAmount; // 新エントリの影響を反映
+    }
+    saveBalance(b);
   }
+
+  let accountName, cardName;
+  if (newAccId) {
+    const b = loadBalance();
+    const acc = b.accounts.find(a => a.id === newAccId);
+    accountName = acc ? acc.name : undefined;
+  }
+  if (newCardId) {
+    const b = loadBalance();
+    const card = (b.cards || []).find(c => c.id === newCardId);
+    cardName = card ? card.name : undefined;
+  }
+
   entries[idx] = {
     ...entry,
     date: document.getElementById('edit-date').value,
     name: document.getElementById('edit-name').value.trim(),
     amount: newAmount,
     cat: document.getElementById('edit-cat').value.trim(),
-    ...(entry.status !== undefined ? { status: document.getElementById('edit-status').value } : {})
+    ...(entry.status !== undefined ? { status: document.getElementById('edit-status').value } : {}),
+    ...(entry.type === 'expense' ? { paid: document.getElementById('edit-paid').checked } : {})
   };
+  delete entries[idx].accountId; delete entries[idx].accountName;
+  delete entries[idx].cardId; delete entries[idx].cardName;
+  if (newAccId) { entries[idx].accountId = newAccId; entries[idx].accountName = accountName; }
+  if (newCardId) { entries[idx].cardId = newCardId; entries[idx].cardName = cardName; }
   setEntries(mode, year, month, entries);
   closeModal();
   renderAll();
@@ -1249,7 +1425,7 @@ function renderEntries(mode) {
     <div class="entry">
       ${e.date ? `<span style="font-size:11px;color:var(--text-hint);font-family:var(--mono);white-space:nowrap">${e.date.slice(5).replace('-','/')}</span>` : ''}
       <span class="entry-cat ${e.type==='income'?'cat-inc':'cat-exp'}">${e.cat}</span>
-      <span class="entry-name">${e.name}${e.status ? `<span class="entry-status ${e.status==='請求済'?'status-done':'status-pending'}">${e.status}</span>` : ''}${e.accountName ? `<span class="acc-badge">🏦${e.accountName}</span>` : ''}</span>
+      <span class="entry-name">${e.name}${e.status ? `<span class="entry-status ${e.status==='請求済'?'status-done':'status-pending'}">${e.status}</span>` : ''}${e.paid === false ? `<span class="entry-status status-pending">未払い</span>` : ''}${e.accountName ? `<span class="acc-badge">🏦${e.accountName}</span>` : ''}${e.cardName ? `<span class="acc-badge" style="border-color:var(--gold);color:var(--gold)">💳${e.cardName}</span>` : ''}</span>
       <span class="entry-amount ${e.type==='income'?'inc':'exp'}">${e.type==='income'?'+':'-'}${fmt(e.amount)}</span>
       <button class="del-btn" onclick="openCtxMenu(event,'${mode}',${e.id})" title="メニュー">︙</button>
     </div>
@@ -1638,12 +1814,29 @@ function renderBudget() {
 // ---- 残高・負債 ----
 function updateAccountSelects() {
   const b = loadBalance();
-  const opts = b.accounts.length
-    ? b.accounts.map(a => `<option value="${a.id}">${a.name}（${fmt(a.balance)}）</option>`).join('')
+  const accOpts = b.accounts.length
+    ? b.accounts.map(a => `<option value="acc-${a.id}">🏦 ${a.name}（${fmt(a.balance)}）</option>`).join('')
+    : '';
+  const cardOpts = (b.cards || []).length
+    ? b.cards.map(c => `<option value="card-${c.id}">💳 ${c.name}</option>`).join('')
+    : '';
+
+  // 収入の入金先：口座のみ
+  const incOpts = b.accounts.length
+    ? b.accounts.map(a => `<option value="acc-${a.id}">${a.name}（${fmt(a.balance)}）</option>`).join('')
     : '<option value="" disabled>口座を登録してください</option>';
-  ['p-exp-account','b-exp-account','p-inc-account','b-inc-account'].forEach(id => {
+  ['p-inc-account','b-inc-account'].forEach(id => {
     const el = document.getElementById(id);
-    if (el) el.innerHTML = opts;
+    if (el) el.innerHTML = incOpts;
+  });
+
+  // 支出の支払い方法：口座直接 or クレカ
+  const expOpts = (accOpts || cardOpts)
+    ? `${accOpts ? `<optgroup label="🏦 口座直接">${accOpts}</optgroup>` : ''}${cardOpts ? `<optgroup label="💳 クレジットカード">${cardOpts}</optgroup>` : ''}`
+    : '<option value="" disabled>口座・カードを登録してください</option>';
+  ['p-exp-account','b-exp-account'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = expOpts;
   });
 }
 
@@ -1730,16 +1923,17 @@ function deleteAccount(id) {
 
 function addCreditCard() {
   const name = document.getElementById('cc-name').value.trim();
-  const amount = parseFloat(document.getElementById('cc-amount').value) || 0;
   const next = parseFloat(document.getElementById('cc-next').value) || 0;
   const debt = parseFloat(document.getElementById('cc-debt').value) || 0;
   const day = parseInt(document.getElementById('cc-day').value);
   if (!name || isNaN(day)) return;
   const b = loadBalance();
-  b.cards.push({ id: Date.now(), name, amount, next, debt, day });
+  if (!b.cards) b.cards = [];
+  b.cards.push({ id: Date.now(), name, next, debt, day });
   saveBalance(b);
-  ['cc-name','cc-amount','cc-next','cc-debt','cc-day'].forEach(id => document.getElementById(id).value = '');
+  ['cc-name','cc-next','cc-debt','cc-day'].forEach(id => document.getElementById(id).value = '');
   renderBalance();
+  updateAccountSelects();
 }
 
 function deleteCreditCard(id) {
@@ -1747,6 +1941,7 @@ function deleteCreditCard(id) {
   b.cards = b.cards.filter(c => c.id !== id);
   saveBalance(b);
   renderBalance();
+  updateAccountSelects();
 }
 
 function addLoan() {
@@ -1798,15 +1993,23 @@ function renderBalance() {
   const totalEl = document.getElementById('account-total');
   totalEl.textContent = b.accounts.length > 1 ? `合計 ${fmt(totalAcc)}` : '';
 
+  // 今月のエントリ（現在表示中の月を基準に集計）
+  const pm = state.personal.month, py = state.personal.year;
+  const bm = state.business.month, by = state.business.year;
+  const pE = getEntries('personal', py, pm);
+  const bE = getEntries('business', by, bm);
+  const allExpEntries = [...pE, ...bE].filter(e => e.type === 'expense');
+
   // クレカ一覧
   const ccEl = document.getElementById('creditcard-list');
-  ccEl.innerHTML = b.cards.length ? b.cards.map(c => {
+  ccEl.innerHTML = (b.cards||[]).length ? b.cards.map(c => {
     const daysUntil = (() => {
       const target = new Date(today.getFullYear(), today.getMonth(), c.day);
       if (target < today) target.setMonth(target.getMonth() + 1);
       return Math.ceil((target - today) / 86400000);
     })();
     const urgent = daysUntil <= 7;
+    const cardUsage = allExpEntries.filter(e => e.cardId === c.id).reduce((s,e) => s + e.amount, 0);
     return `
     <div class="entry" style="flex-wrap:wrap;gap:6px;${urgent?'border-color:var(--gold);background:#1a1200':''}">
       <span class="entry-name" style="flex:1;min-width:100px">💳 ${c.name}</span>
@@ -1814,9 +2017,9 @@ function renderBalance() {
         ${c.day}日引落${urgent?` ⚠ あと${daysUntil}日`:''}
       </span>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px">
-        <div style="font-size:11px;color:var(--text-muted)">今月: <span style="color:var(--red);font-family:var(--mono)">-${fmt(c.amount)}</span></div>
-        ${c.next ? `<div style="font-size:11px;color:var(--text-muted)">翌月: <span style="color:var(--gold);font-family:var(--mono)">-${fmt(c.next)}</span></div>` : ''}
-        ${c.debt ? `<div style="font-size:11px;color:var(--text-muted)">残債: <span style="color:var(--mp);font-family:var(--mono)">${fmt(c.debt)}</span></div>` : ''}
+        <div style="font-size:11px;color:var(--text-muted)">今月利用: <span style="color:var(--red);font-family:var(--mono)">-${fmt(cardUsage)}</span></div>
+        ${c.next ? `<div style="font-size:11px;color:var(--text-muted)">翌月請求予定: <span style="color:var(--gold);font-family:var(--mono)">-${fmt(c.next)}</span></div>` : ''}
+        ${c.debt ? `<div style="font-size:11px;color:var(--text-muted)">分割残債: <span style="color:var(--mp);font-family:var(--mono)">${fmt(c.debt)}</span></div>` : ''}
       </div>
       <button class="del-btn" onclick="deleteCreditCard(${c.id})">×</button>
     </div>`;
@@ -1841,19 +2044,15 @@ function renderBalance() {
   }).join('') : '';
 
   // 月末CF予測
-  const pm = state.personal.month, py = state.personal.year;
-  const bm = state.business.month, by = state.business.year;
-  const pE = getEntries('personal', py, pm);
-  const bE = getEntries('business', by, bm);
   const monthIncome = pE.filter(e=>e.type==='income').reduce((s,e)=>s+e.amount,0)
                     + bE.filter(e=>e.type==='income').reduce((s,e)=>s+e.amount,0);
   const monthExpense = pE.filter(e=>e.type==='expense').reduce((s,e)=>s+e.amount,0)
                      + bE.filter(e=>e.type==='expense').reduce((s,e)=>s+e.amount,0);
-  const ccTotal = b.cards.reduce((s,c) => s + (c.amount || 0), 0);
-  const ccNextTotal = b.cards.reduce((s,c) => s + (c.next || 0), 0);
-  const ccDebtTotal = b.cards.reduce((s,c) => s + (c.debt || 0), 0);
+  const ccTotal = allExpEntries.filter(e => e.cardId).reduce((s,e) => s + e.amount, 0);
+  const ccNextTotal = (b.cards||[]).reduce((s,c) => s + (c.next || 0), 0);
+  const ccDebtTotal = (b.cards||[]).reduce((s,c) => s + (c.debt || 0), 0);
   const loanTotal = b.loans.reduce((s,l) => s + l.monthly, 0);
-  const endBalance = totalAcc + monthIncome - monthExpense - ccTotal - loanTotal;
+  const endBalance = totalAcc + monthIncome - monthExpense - loanTotal;
 
   const forecastEl = document.getElementById('cf-forecast');
   forecastEl.innerHTML = `
@@ -1870,11 +2069,12 @@ function renderBalance() {
     <div style="font-size:12px;color:var(--text-muted);display:flex;flex-direction:column;gap:4px">
       <div style="display:flex;justify-content:space-between"><span>今月収入</span><span style="font-family:var(--mono);color:var(--green)">+${fmt(monthIncome)}</span></div>
       <div style="display:flex;justify-content:space-between"><span>今月支出</span><span style="font-family:var(--mono);color:var(--red)">-${fmt(monthExpense)}</span></div>
-      <div style="display:flex;justify-content:space-between"><span>クレカ引き落とし</span><span style="font-family:var(--mono);color:var(--red)">-${fmt(ccTotal)}</span></div>
+      ${ccTotal > 0 ? `<div style="display:flex;justify-content:space-between;padding-left:10px;font-size:11px;color:var(--text-hint)"><span>└ うちクレカ利用分（上記に含む・引落は翌月以降）</span><span style="font-family:var(--mono)">${fmt(ccTotal)}</span></div>` : ''}
       <div style="display:flex;justify-content:space-between"><span>ローン・借金返済</span><span style="font-family:var(--mono);color:var(--red)">-${fmt(loanTotal)}</span></div>
+      ${ccNextTotal > 0 ? `<div style="display:flex;justify-content:space-between"><span>💳 クレカ翌月支払予定</span><span style="font-family:var(--mono);color:var(--gold)">-${fmt(ccNextTotal)}</span></div>` : ''}
     </div>
     ${endBalance < 0 ? `<div style="margin-top:12px;padding:10px 12px;background:#330000;border:3px solid var(--red);font-size:12px;color:var(--red)">💀 ざんだかが　たりません！　しゅうしを　みなおしてください！</div>` : ''}
-    ${endBalance >= 0 && endBalance < loanTotal + ccTotal ? `<div style="margin-top:12px;padding:10px 12px;background:#2a2000;border:3px solid var(--gold);font-size:12px;color:var(--gold)">⚠ ひきおとし・へんさいがく が　ざんだかを　こえています！</div>` : ''}
+    ${endBalance >= 0 && endBalance < loanTotal + ccNextTotal ? `<div style="margin-top:12px;padding:10px 12px;background:#2a2000;border:3px solid var(--gold);font-size:12px;color:var(--gold)">⚠ らいげつの　ひきおとし・へんさいがく が　ざんだかを　こえるかもしれません！</div>` : ''}
   `;
   // 振替一覧
   const transferEl = document.getElementById('transfer-list');
@@ -1893,6 +2093,7 @@ function renderBalance() {
 
   updateTransferSelects(b.accounts);
   updateAccountSelects();
+  renderUnpaidList();
 }
 
 // ---- バックアップ ----
