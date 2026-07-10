@@ -843,8 +843,6 @@ select option { background: #0d0d35; }
         <span id="sync-status" style="font-size:12px;color:var(--text-hint)">未設定</span>
       </div>
       <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
-        <button class="csv-btn" onclick="pullFromCloud()">⬇ クラウドから取得</button>
-        <button class="csv-btn" onclick="pushToCloud()">⬆ アップロード</button>
         <button class="csv-btn" onclick="if(confirm('同期を解除しますか？'))disableSync()" style="border-color:var(--red);color:var(--red)">同期を解除</button>
       </div>
     </div>
@@ -2596,7 +2594,7 @@ if ('serviceWorker' in navigator) {
 
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-  import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+  import { getFirestore, doc, setDoc, getDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyAMu3nclmoUz9KBo4yJWdqO7McWmXF3ieg",
@@ -2617,6 +2615,8 @@ if ('serviceWorker' in navigator) {
   }
 
   let syncDocId = localStorage.getItem('cf-sync-docid') || null;
+  let lastSyncedAt = 0; // 自分の書き込みエコーを無視するための基準値
+  let unsubscribeSnapshot = null;
 
   function updateSyncStatus(text, color) {
     const el = document.getElementById('sync-status');
@@ -2624,7 +2624,7 @@ if ('serviceWorker' in navigator) {
     if (text) { el.textContent = text; el.style.color = color || 'var(--text-hint)'; return; }
     if (syncDocId) {
       const last = localStorage.getItem('cf-sync-last');
-      el.textContent = `✅ 同期ON${last ? '（最終同期: ' + new Date(parseInt(last)).toLocaleString('ja-JP') + '）' : ''}`;
+      el.textContent = `📡 リアルタイム同期ON${last ? '（最終更新: ' + new Date(parseInt(last)).toLocaleString('ja-JP') + '）' : ''}`;
       el.style.color = 'var(--green)';
     } else {
       el.textContent = '未設定';
@@ -2632,11 +2632,30 @@ if ('serviceWorker' in navigator) {
     }
   }
 
+  function startListening() {
+    if (unsubscribeSnapshot) { unsubscribeSnapshot(); unsubscribeSnapshot = null; }
+    if (!syncDocId) return;
+    unsubscribeSnapshot = onSnapshot(doc(db, 'cf-sync', syncDocId), (snap) => {
+      if (!snap.exists()) return;
+      const cloud = snap.data();
+      if ((cloud.updatedAt || 0) > lastSyncedAt) {
+        lastSyncedAt = cloud.updatedAt;
+        window.applyAllLocalData(cloud);
+        localStorage.setItem('cf-sync-last', String(Date.now()));
+        updateSyncStatus();
+      }
+    }, (err) => {
+      console.error('listen error', err);
+      updateSyncStatus('❌ 同期エラー（通信状況をご確認ください）', 'var(--red)');
+    });
+  }
+
   async function pushToCloud() {
     if (!syncDocId) return;
     updateSyncStatus('⏳ アップロード中...', 'var(--gold)');
     try {
       const data = window.gatherAllLocalData();
+      lastSyncedAt = data.updatedAt; // 自分の書き込みのエコーを無視するため先に更新
       await setDoc(doc(db, 'cf-sync', syncDocId), data);
       localStorage.setItem('cf-sync-last', String(Date.now()));
       updateSyncStatus();
@@ -2659,9 +2678,11 @@ if ('serviceWorker' in navigator) {
           Object.keys(localData.state.business.entries || {}).length > 0
         );
         if (!localHasData) {
+          lastSyncedAt = cloud.updatedAt || 0;
           window.applyAllLocalData(cloud);
         } else if ((cloud.updatedAt || 0) > (localData.updatedAt || 0)) {
           if (silent || confirm('クラウドの方が新しいデータがあります。この端末に反映しますか？\n（キャンセルすると、この端末のデータでクラウドを上書きします）')) {
+            lastSyncedAt = cloud.updatedAt || 0;
             window.applyAllLocalData(cloud);
           } else {
             await pushToCloud();
@@ -2685,10 +2706,11 @@ if ('serviceWorker' in navigator) {
   function scheduleSync() {
     if (!syncDocId) return;
     clearTimeout(syncTimer);
-    syncTimer = setTimeout(pushToCloud, 2000);
+    syncTimer = setTimeout(pushToCloud, 1500);
   }
 
   function disableSync() {
+    if (unsubscribeSnapshot) { unsubscribeSnapshot(); unsubscribeSnapshot = null; }
     localStorage.removeItem('cf-sync-docid');
     localStorage.removeItem('cf-sync-last');
     syncDocId = null;
@@ -2711,14 +2733,17 @@ if ('serviceWorker' in navigator) {
     localStorage.setItem('cf-sync-docid', syncDocId);
     input.value = '';
     await pullFromCloud(true);
-    alert('クラウド同期を設定しました！他の端末でも同じ合言葉を入力してください。');
+    startListening();
+    alert('クラウド同期を設定しました！他の端末でも同じ合言葉を入力すれば、自動的にリアルタイムで同期されます。');
   };
   window.pushToCloud = () => pushToCloud();
   window.pullFromCloud = () => pullFromCloud(false);
   window.disableSync = disableSync;
 
   updateSyncStatus();
-  if (syncDocId) pullFromCloud(true);
+  if (syncDocId) {
+    pullFromCloud(true).then(() => startListening());
+  }
 </script>
 </body>
 </html>
