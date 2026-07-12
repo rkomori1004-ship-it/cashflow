@@ -9,7 +9,9 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="CF管理">
-<meta name="theme-color" content="#1D7A5F">
+<meta name="theme-color" content="#0a0a1a">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png">
 <link rel="apple-touch-icon" href="icon-192.png">
 <link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Press+Start+2P&display=swap" rel="stylesheet">
 <style>
@@ -339,7 +341,7 @@ header {
 .checkbox-field { display: flex; flex-direction: column; align-items: flex-start; }
 .checkbox-field label { margin-bottom: 6px; }
 .checkbox-field input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--green); cursor: pointer; }
-.form-grid.unpaid-grid { grid-template-columns: 0.9fr 1.2fr 0.9fr 1fr 1fr auto; gap: 8px; align-items: end; margin-bottom: 12px; }
+.form-grid.unpaid-grid { grid-template-columns: 0.8fr 1fr 0.8fr 0.9fr 0.9fr 1fr auto; gap: 8px; align-items: end; margin-bottom: 12px; }
 
 .csv-btn {
   display: flex; align-items: center; gap: 6px;
@@ -671,6 +673,9 @@ select option { background: #0d0d35; }
         </div>
         <div class="field" id="unpaid-link-wrap" style="display:none"><label id="unpaid-link-label">カード</label>
           <select id="unpaid-link"></select>
+        </div>
+        <div class="field"><label>支払い元口座</label>
+          <select id="unpaid-account"><option value="">未指定（残高に反映しない）</option></select>
         </div>
         <button class="add-btn red" onclick="addUnpaid()" title="追加">+</button>
       </div>
@@ -1166,6 +1171,7 @@ function addUnpaid() {
   const amountEl = document.getElementById('unpaid-amount');
   const catEl = document.getElementById('unpaid-cat');
   const linkEl = document.getElementById('unpaid-link');
+  const accEl = document.getElementById('unpaid-account');
   const name = nameEl.value.trim();
   const amount = parseFloat(amountEl.value);
   const month = monthEl.value; // "YYYY-MM" 形式 or 空
@@ -1187,6 +1193,12 @@ function addUnpaid() {
       if (loan) { item.loanId = loan.id; item.linkName = loan.name; }
     }
   }
+  // 支払い元口座（支払い済みにした瞬間、ここから引かれる）
+  if (accEl.value) {
+    const b = loadBalance();
+    const acc = (b.accounts||[]).find(a => a.id === parseInt(accEl.value));
+    if (acc) { item.accountId = acc.id; item.accountName = acc.name; }
+  }
   const list = loadUnpaid();
   list.push(item);
   saveUnpaid(list);
@@ -1195,16 +1207,31 @@ function addUnpaid() {
 }
 
 function markUnpaidDone(id) {
-  const list = loadUnpaid().filter(u => u.id !== id);
-  saveUnpaid(list);
-  renderUnpaidList();
+  const list = loadUnpaid();
+  const item = list.find(u => u.id === id);
+  // 支払い元の口座が指定されていれば、今このタイミングで残高から引く
+  if (item && item.accountId) {
+    const b = loadBalance();
+    const acc = b.accounts.find(a => a.id === item.accountId);
+    if (acc) { acc.balance -= item.amount; saveBalance(b); }
+  }
+  saveUnpaid(list.filter(u => u.id !== id));
+  renderAll();
 }
 
 function markAutoUnpaidDone(mode, bucketKey, id) {
   const arr = state[mode].entries[bucketKey] || [];
   const idx = arr.findIndex(e => e.id === id);
   if (idx !== -1) {
-    arr[idx].paid = true;
+    const entry = arr[idx];
+    // 口座払いで、まだ残高に反映されていなければ、今このタイミングで反映する
+    if (entry.accountId && !entry.balanceApplied) {
+      const b = loadBalance();
+      const acc = b.accounts.find(a => a.id === entry.accountId);
+      if (acc) { acc.balance -= entry.amount; saveBalance(b); }
+      entry.balanceApplied = true;
+    }
+    entry.paid = true;
     saveState();
   }
   renderAll();
@@ -1336,9 +1363,15 @@ function addEntry(mode, type) {
     const accId = parseInt(rawVal.slice(4));
     entry.accountId = accId;
     entry.accountName = accEl.options[accEl.selectedIndex]?.text.replace('🏦','').split('（')[0].trim() || '';
-    const b = loadBalance();
-    const acc = b.accounts.find(a => a.id === accId);
-    if (acc) { acc.balance += isInc ? amount : -amount; saveBalance(b); }
+    // 支払済み（または収入）の場合のみ、その場で口座残高に反映する。未払いならまだ反映しない
+    if (entry.paid !== false) {
+      const b = loadBalance();
+      const acc = b.accounts.find(a => a.id === accId);
+      if (acc) { acc.balance += isInc ? amount : -amount; saveBalance(b); }
+      entry.balanceApplied = true;
+    } else {
+      entry.balanceApplied = false;
+    }
   } else if (rawVal && rawVal.startsWith('card-')) {
     const cardId = parseInt(rawVal.slice(5));
     entry.cardId = cardId;
@@ -1393,8 +1426,8 @@ function getCtxEntry() {
 function ctxDelete() {
   const { mode, id } = ctxState;
   const entry = getCtxEntry();
-  // 口座と連動している場合は残高を戻す
-  if (entry && entry.accountId) {
+  // 口座と連動していて、かつ実際に残高へ反映済みの場合のみ、残高を戻す
+  if (entry && entry.accountId && entry.balanceApplied !== false) {
     const b = loadBalance();
     const acc = b.accounts.find(a => a.id === entry.accountId);
     if (acc) { acc.balance += (entry.type === 'income' ? -entry.amount : entry.amount); saveBalance(b); }
@@ -1477,14 +1510,22 @@ function saveEdit() {
   const oldAccId = entry.accountId || null;
   const sign = entry.type === 'income' ? 1 : -1;
 
-  // 口座残高の調整（旧口座を取り消し→新口座を反映）
-  if (oldAccId !== newAccId || newAmount !== entry.amount) {
+  // 支払済みチェック（支出のみ存在）。収入は常に「反映済み」として扱う
+  const newPaid = entry.type === 'expense'
+    ? document.getElementById('edit-paid').checked
+    : true;
+
+  // 「実際に残高へ反映されていたか」を旧・新それぞれ判定
+  const wasApplied = !!oldAccId && entry.balanceApplied !== false;
+  const willBeApplied = !!newAccId && newPaid !== false;
+
+  if (wasApplied || willBeApplied) {
     const b = loadBalance();
-    if (oldAccId) {
+    if (wasApplied) {
       const oldAcc = b.accounts.find(a => a.id === oldAccId);
       if (oldAcc) oldAcc.balance -= sign * entry.amount; // 旧エントリの影響を取り消す
     }
-    if (newAccId) {
+    if (willBeApplied) {
       const newAcc = b.accounts.find(a => a.id === newAccId);
       if (newAcc) newAcc.balance += sign * newAmount; // 新エントリの影響を反映
     }
@@ -1510,11 +1551,16 @@ function saveEdit() {
     amount: newAmount,
     cat: document.getElementById('edit-cat').value.trim(),
     ...(entry.status !== undefined ? { status: document.getElementById('edit-status').value } : {}),
-    ...(entry.type === 'expense' ? { paid: document.getElementById('edit-paid').checked } : {})
+    ...(entry.type === 'expense' ? { paid: newPaid } : {})
   };
   delete entries[idx].accountId; delete entries[idx].accountName;
   delete entries[idx].cardId; delete entries[idx].cardName;
-  if (newAccId) { entries[idx].accountId = newAccId; entries[idx].accountName = accountName; }
+  delete entries[idx].balanceApplied;
+  if (newAccId) {
+    entries[idx].accountId = newAccId;
+    entries[idx].accountName = accountName;
+    entries[idx].balanceApplied = willBeApplied;
+  }
   if (newCardId) { entries[idx].cardId = newCardId; entries[idx].cardName = cardName; }
   setEntries(mode, year, month, entries);
   closeModal();
@@ -1776,6 +1822,13 @@ function copyForAI() {
 
   const catLines = (cats) => Object.entries(cats).sort((a,b)=>b[1]-a[1]).map(([k,v]) => `  ・${k}: ¥${v.toLocaleString()}`).join('\n') || '  （記録なし）';
 
+  // 未払い一覧
+  const unpaidItems = getUnpaidItems();
+  const unpaidLines = unpaidItems.length
+    ? unpaidItems.map(u => `  ・${u.month} ${u.name}（${u.linkName || u.cat}）: ¥${u.amount.toLocaleString()}`).join('\n')
+    : '  （未払いなし）';
+  const unpaidTotal = unpaidItems.reduce((s,u)=>s+u.amount,0);
+
   const text = `${year}年${month+1}月の家計・収支データです。使いすぎているものがあれば具体的に指摘して、来月に向けたアドバイスをください。
 
 【収入】
@@ -1791,7 +1844,11 @@ ${catLines(bCats)}
 事業経費合計: ¥${bExp.toLocaleString()}
 
 【純収支】
-¥${(pInc+bInc-pExp-bExp).toLocaleString()}`;
+¥${(pInc+bInc-pExp-bExp).toLocaleString()}
+
+【未払い一覧（クレカ・ローン・公共料金など、まだ払っていないもの）】
+${unpaidLines}
+未払い合計: ¥${unpaidTotal.toLocaleString()}`;
 
   navigator.clipboard.writeText(text).then(() => {
     alert('コピーしました！ClaudeやChatGPTに貼り付けて相談してみてください。');
@@ -2201,6 +2258,15 @@ function updateAccountSelects() {
     const el = document.getElementById(id);
     if (el) el.innerHTML = expOpts;
   });
+
+  // 未払い一覧の支払い元口座（値はプレーンな口座IDを使用）
+  const unpaidAccEl = document.getElementById('unpaid-account');
+  if (unpaidAccEl) {
+    const v = unpaidAccEl.value;
+    const plainOpts = b.accounts.map(a => `<option value="${a.id}">${a.name}（${fmt(a.balance)}）</option>`).join('');
+    unpaidAccEl.innerHTML = '<option value="">未指定（残高に反映しない）</option>' + plainOpts;
+    unpaidAccEl.value = v;
+  }
 }
 
 // ---- 振替 ----
@@ -2327,15 +2393,6 @@ function deleteLoan(id) {
   b.loans = b.loans.filter(l => l.id !== id);
   saveBalance(b);
   renderBalance();
-}
-
-function updateAccountSelects() {
-  const b = loadBalance();
-  const opts = '<option value="">なし(現金)</option>' + b.accounts.map(a => `<option value="${a.id}">${a.name}</option>`).join('');
-  ['p-exp-account','b-exp-account'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) { const v = el.value; el.innerHTML = opts; el.value = v; }
-  });
 }
 
 function renderBalance() {
@@ -2468,16 +2525,22 @@ function gatherAllLocalData() {
     budget: JSON.parse(localStorage.getItem('cf-budget-v1') || 'null'),
     level: JSON.parse(localStorage.getItem('cf-level-v1') || 'null'),
     unpaid: JSON.parse(localStorage.getItem('cf-unpaid-v1') || 'null'),
-    updatedAt: Date.now()
+    // 「毎回その場の現在時刻」ではなく、実際にローカルデータが最後に変更された時刻を使う
+    updatedAt: parseInt(localStorage.getItem('cf-local-updated-at') || '0') || Date.now()
   };
 }
 
 function applyAllLocalData(data) {
+  // クラウドからの反映中は「ローカル変更」として扱わないようフラグを立てる
+  window.__isApplyingRemoteSync = true;
   if (data.state) { state = data.state; saveState(); }
   if (data.balance) localStorage.setItem('cf-balance-v1', JSON.stringify(data.balance));
   if (data.budget) localStorage.setItem('cf-budget-v1', JSON.stringify(data.budget));
   if (data.level) localStorage.setItem('cf-level-v1', JSON.stringify(data.level));
   if (data.unpaid) localStorage.setItem('cf-unpaid-v1', JSON.stringify(data.unpaid));
+  window.__isApplyingRemoteSync = false;
+  // 反映した時点＝クラウドの更新時刻を、ローカルの基準時刻としてそのまま採用
+  if (data.updatedAt) localStorage.setItem('cf-local-updated-at', String(data.updatedAt));
   renderAll();
 }
 
@@ -2722,7 +2785,11 @@ if ('serviceWorker' in navigator) {
   const origSetItem = localStorage.setItem.bind(localStorage);
   localStorage.setItem = function(key, value) {
     origSetItem(key, value);
-    if (SYNCED_KEYS.includes(key)) scheduleSync();
+    // クラウドからの反映中に発生した書き込みは「ローカル変更」としてカウントしない
+    if (SYNCED_KEYS.includes(key) && !window.__isApplyingRemoteSync) {
+      origSetItem('cf-local-updated-at', String(Date.now()));
+      scheduleSync();
+    }
   };
 
   window.handleSetupSync = async () => {
@@ -2730,10 +2797,61 @@ if ('serviceWorker' in navigator) {
     const val = input.value.trim();
     if (!val || val.length < 4) { alert('合言葉は4文字以上で入力してください'); return; }
     syncDocId = await hashPassphrase(val);
+
+    updateSyncStatus('⏳ 確認中...', 'var(--gold)');
+
+    const localData = window.gatherAllLocalData();
+    const localHasData = localData.state && (
+      Object.keys(localData.state.personal.entries || {}).length > 0 ||
+      Object.keys(localData.state.business.entries || {}).length > 0
+    );
+
+    let cloudData = null, cloudHasData = false;
+    try {
+      const snap = await getDoc(doc(db, 'cf-sync', syncDocId));
+      if (snap.exists()) {
+        cloudData = snap.data();
+        cloudHasData = cloudData.state && (
+          Object.keys(cloudData.state.personal.entries || {}).length > 0 ||
+          Object.keys(cloudData.state.business.entries || {}).length > 0
+        );
+      }
+    } catch (e) {
+      console.error('setup check error', e);
+      updateSyncStatus('❌ 確認に失敗しました。時間をおいて再度お試しください', 'var(--red)');
+      return;
+    }
+
     localStorage.setItem('cf-sync-docid', syncDocId);
     input.value = '';
-    await pullFromCloud(true);
+
+    if (!cloudHasData) {
+      // クラウドにまだデータがない → この端末のデータをアップロード
+      lastSyncedAt = localData.updatedAt || 0;
+      await pushToCloud();
+    } else if (!localHasData) {
+      // この端末にまだデータがない → クラウドのデータを取得
+      lastSyncedAt = cloudData.updatedAt || 0;
+      window.applyAllLocalData(cloudData);
+    } else {
+      // 両方にデータがある → どちらを使うか確認する
+      const useCloud = confirm(
+        'クラウドにも、この端末にもデータがあります。\n\n' +
+        'OK：クラウドのデータをこの端末に反映する\n' +
+        'キャンセル：この端末のデータでクラウドを上書きする\n\n' +
+        '（あとで違う方を選びたい場合は、バックアップからJSONで復元できます）'
+      );
+      if (useCloud) {
+        lastSyncedAt = cloudData.updatedAt || 0;
+        window.applyAllLocalData(cloudData);
+      } else {
+        lastSyncedAt = localData.updatedAt || 0;
+        await pushToCloud();
+      }
+    }
+
     startListening();
+    updateSyncStatus();
     alert('クラウド同期を設定しました！他の端末でも同じ合言葉を入力すれば、自動的にリアルタイムで同期されます。');
   };
   window.pushToCloud = () => pushToCloud();
