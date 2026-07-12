@@ -570,9 +570,9 @@ select option { background: #0d0d35; }
         <div class="field"><label>発生日／支払期日</label><input id="p-exp-date" type="date" onkeydown="if(event.key==='Enter')addEntry('personal','expense')"></div>
         <div class="field"><label>内容</label><input id="p-exp-name" list="p-exp-namelist" placeholder="家賃、食費など" onkeydown="if(event.key==='Enter')addEntry('personal','expense')"></div>
         <datalist id="p-exp-namelist"></datalist>
-        <div class="field"><label>金額（円）</label><input id="p-exp-amount" type="number" placeholder="80000" onkeydown="if(event.key==='Enter')addEntry('personal','expense')"></div>
+        <div class="field"><label>金額（円）</label><input id="p-exp-amount" type="number" placeholder="80000" oninput="updateAllocHint()" onkeydown="if(event.key==='Enter')addEntry('personal','expense')"></div>
         <div class="field"><label>カテゴリ</label>
-          <select id="p-exp-cat">
+          <select id="p-exp-cat" onchange="updateAllocHint()">
             <option>家賃・住宅費</option><option>食費</option><option>光熱費</option><option>交通費</option><option>通信費</option><option>娯楽・外食</option><option>美容・理髪</option><option>医療・保険</option><option>教育</option><option>衣類</option><option>その他</option>
           </select>
         </div>
@@ -582,6 +582,12 @@ select option { background: #0d0d35; }
         <div class="field checkbox-field"><label>支払済</label><input type="checkbox" id="p-exp-paid" checked></div>
         <button class="add-btn red" onclick="addEntry('personal','expense')" title="追加">+</button>
         <button class="add-btn" style="background:var(--win-light);color:var(--mp);border:3px solid var(--mp)" onclick="saveAsTemplate('personal','expense')" title="固定費テンプレとして保存">📌</button>
+      </div>
+      <div id="alloc-hint" style="display:none;margin-top:10px;padding:10px 12px;background:#0d0d35;border:2px solid var(--mp)">
+        <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--mp);cursor:pointer">
+          <input type="checkbox" id="p-exp-alloc-check" style="width:18px;height:18px;accent-color:var(--mp)" checked>
+          <span id="alloc-hint-text"></span>
+        </label>
       </div>
     </div>
     <div class="card">
@@ -646,7 +652,7 @@ select option { background: #0d0d35; }
         <div class="field"><label>金額（円）</label><input id="b-exp-amount" type="number" placeholder="10000" onkeydown="if(event.key==='Enter')addEntry('business','expense')"></div>
         <div class="field"><label>カテゴリ</label>
           <select id="b-exp-cat">
-            <option>通信費</option><option>ソフトウェア・SaaS</option><option>交通費</option><option>機材・備品</option><option>外注費</option><option>交際費</option><option>会議費</option><option>書籍・学習</option><option>健康投資</option><option>広告宣伝</option><option>その他経費</option>
+            <option>家賃・地代</option><option>水道光熱費</option><option>通信費</option><option>ソフトウェア・SaaS</option><option>交通費</option><option>機材・備品</option><option>外注費</option><option>交際費</option><option>会議費</option><option>書籍・学習</option><option>健康投資</option><option>広告宣伝</option><option>その他経費</option>
           </select>
         </div>
         <div class="field"><label>支払い方法</label>
@@ -898,6 +904,22 @@ select option { background: #0d0d35; }
         <div class="field"><label>フリーランス経費上限（円）</label><input id="budget-biz-exp" type="number" placeholder="50000"></div>
       </div>
       <button class="csv-btn" onclick="saveBudget()" style="border-color:var(--accent);color:var(--accent);background:var(--accent-bg)">保存する</button>
+    </div>
+
+    <!-- 家事按分設定 -->
+    <div class="card" style="border-color:var(--mp)">
+      <div class="card-title" style="color:var(--mp)">🏠 家事按分設定</div>
+      <p style="font-size:11px;color:var(--text-muted);margin-bottom:12px">在宅ワークで家賃・光熱費などを一部経費にしたい場合、カテゴリごとに按分率（％）を設定できます。家計で入力する時、按分後の金額を自動で事業経費にも計上できるようになります</p>
+      <div class="form-grid" style="grid-template-columns:1.2fr 1fr auto;gap:8px;align-items:end;margin-bottom:12px">
+        <div class="field"><label>家計カテゴリ</label>
+          <select id="alloc-cat">
+            <option>家賃・住宅費</option><option>光熱費</option><option>通信費</option><option>交通費</option><option>その他</option>
+          </select>
+        </div>
+        <div class="field"><label>按分率（％）</label><input id="alloc-rate" type="number" min="1" max="100" placeholder="30"></div>
+        <button class="add-btn" style="background:var(--win-light);color:var(--mp);border:3px solid var(--mp)" onclick="setAllocation()" title="設定">+</button>
+      </div>
+      <div id="alloc-list"></div>
     </div>
     <div id="budget-progress"></div>
 
@@ -1555,10 +1577,38 @@ function addEntry(mode, type) {
   }
   entries.unshift(entry);
   setEntries(mode, year, month, entries);
+
+  // 家事按分：家計の支出で、按分設定＆チェックがONなら事業経費にも自動計上
+  if (mode === 'personal' && !isInc) {
+    const allocCheckEl = document.getElementById('p-exp-alloc-check');
+    const allocHintEl = document.getElementById('alloc-hint');
+    if (allocHintEl && allocHintEl.style.display !== 'none' && allocCheckEl && allocCheckEl.checked) {
+      const map = loadAllocations();
+      const rate = map[entry.cat];
+      if (rate) {
+        const allocAmount = Math.round(amount * rate / 100);
+        if (allocAmount > 0) {
+          const bizCatMap = { '家賃・住宅費': '家賃・地代', '光熱費': '水道光熱費', '通信費': '通信費', '交通費': '交通費' };
+          const bizCat = bizCatMap[entry.cat] || 'その他経費';
+          const { month: bMonth, year: bYear } = state.business;
+          const bizEntries = getEntries('business', bYear, bMonth);
+          bizEntries.unshift({
+            id: Date.now() + 1,
+            date: entry.date, name: `${entry.name}（家事按分${rate}%）`,
+            amount: allocAmount, type: 'expense', cat: bizCat, paid: true
+          });
+          setEntries('business', bYear, bMonth, bizEntries);
+        }
+      }
+    }
+  }
+
   awardDailyXP();
   nameEl.value = ''; amountEl.value = '';
   const paidElReset = document.getElementById(`${p}-exp-paid`);
   if (paidElReset) paidElReset.checked = true;
+  const allocHintReset = document.getElementById('alloc-hint');
+  if (allocHintReset) allocHintReset.style.display = 'none';
   nameEl.focus();
   renderAll();
 }
@@ -2425,7 +2475,7 @@ const FREEE_ACCOUNT_MAP = {
     'ライティング': '売上高', 'コンサル': '売上高', '撮影・動画': '売上高', 'その他売上': '売上高'
   },
   expense: {
-    '通信費': '通信費', 'ソフトウェア・SaaS': '消耗品費', '交通費': '旅費交通費',
+    '家賃・地代': '地代家賃', '水道光熱費': '水道光熱費', '通信費': '通信費', 'ソフトウェア・SaaS': '消耗品費', '交通費': '旅費交通費',
     '機材・備品': '消耗品費', '外注費': '外注費', '交際費': '交際費', '会議費': '会議費',
     '書籍・学習': '研修採用費', '健康投資': '福利厚生費', '広告宣伝': '広告宣伝費', 'その他経費': '雑費'
   }
@@ -2809,6 +2859,7 @@ function renderBudget() {
   document.getElementById('budget-exp').value = b.exp||'';
   document.getElementById('budget-biz-inc').value = b.bizInc||'';
   document.getElementById('budget-biz-exp').value = b.bizExp||'';
+  renderAllocations();
 
   const pm = state.personal.month, py = state.personal.year;
   const bm = state.business.month, by = state.business.year;
@@ -2837,6 +2888,69 @@ function renderBudget() {
       ${progressHTML('売上目標', bInc, b.bizInc)}
       ${progressHTML('経費上限', bExp, b.bizExp, true)}
     </div>`;
+}
+
+// ---- 家事按分 ----
+function loadAllocations() {
+  try { return JSON.parse(localStorage.getItem('cf-allocation-v1')) || {}; } catch(e) { return {}; }
+}
+function saveAllocations(map) { localStorage.setItem('cf-allocation-v1', JSON.stringify(map)); }
+
+function setAllocation() {
+  const catEl = document.getElementById('alloc-cat');
+  const rateEl = document.getElementById('alloc-rate');
+  const rate = parseFloat(rateEl.value);
+  if (isNaN(rate) || rate <= 0 || rate > 100) {
+    rateEl.style.borderColor = 'var(--red)';
+    setTimeout(() => { rateEl.style.borderColor = ''; }, 1000);
+    return;
+  }
+  const map = loadAllocations();
+  map[catEl.value] = rate;
+  saveAllocations(map);
+  rateEl.value = '';
+  renderAllocations();
+  updateAllocHint();
+}
+
+function deleteAllocation(cat) {
+  const map = loadAllocations();
+  delete map[cat];
+  saveAllocations(map);
+  renderAllocations();
+  updateAllocHint();
+}
+
+function renderAllocations() {
+  const el = document.getElementById('alloc-list');
+  if (!el) return;
+  const map = loadAllocations();
+  const cats = Object.keys(map);
+  el.innerHTML = cats.length ? cats.map(cat => `
+    <div class="entry">
+      <span class="entry-name">${cat}</span>
+      <span style="font-family:var(--mono);font-size:13px;color:var(--mp)">${map[cat]}%が事業経費</span>
+      <button class="del-btn" onclick="deleteAllocation('${cat}')" title="削除">×</button>
+    </div>`).join('') : '<div class="empty">按分設定はまだありません</div>';
+}
+
+// 家計の支出フォームで、按分設定されたカテゴリを選ぶとヒントを表示
+function updateAllocHint() {
+  const catEl = document.getElementById('p-exp-cat');
+  const amountEl = document.getElementById('p-exp-amount');
+  const hintEl = document.getElementById('alloc-hint');
+  const textEl = document.getElementById('alloc-hint-text');
+  if (!catEl || !hintEl) return;
+
+  const map = loadAllocations();
+  const rate = map[catEl.value];
+  const amount = parseFloat(amountEl.value) || 0;
+
+  if (!rate) { hintEl.style.display = 'none'; return; }
+
+  const allocAmount = Math.round(amount * rate / 100);
+  hintEl.style.display = 'block';
+  textEl.textContent = `この${rate}%（${fmt(allocAmount)}）を事業経費（家賃・地代など）にも自動で計上する`;
 }
 
 // ---- 過去の支出・収入を検索 ----
@@ -3318,6 +3432,7 @@ function gatherAllLocalData() {
     unpaid: JSON.parse(localStorage.getItem('cf-unpaid-v1') || 'null'),
     templates: JSON.parse(localStorage.getItem('cf-templates-v1') || 'null'),
     goals: JSON.parse(localStorage.getItem('cf-goals-v1') || 'null'),
+    allocation: JSON.parse(localStorage.getItem('cf-allocation-v1') || 'null'),
     // 「毎回その場の現在時刻」ではなく、実際にローカルデータが最後に変更された時刻を使う
     updatedAt: parseInt(localStorage.getItem('cf-local-updated-at') || '0') || Date.now()
   };
@@ -3333,6 +3448,7 @@ function applyAllLocalData(data) {
   if (data.unpaid) localStorage.setItem('cf-unpaid-v1', JSON.stringify(data.unpaid));
   if (data.templates) localStorage.setItem('cf-templates-v1', JSON.stringify(data.templates));
   if (data.goals) localStorage.setItem('cf-goals-v1', JSON.stringify(data.goals));
+  if (data.allocation) localStorage.setItem('cf-allocation-v1', JSON.stringify(data.allocation));
   window.__isApplyingRemoteSync = false;
   // 反映した時点＝クラウドの更新時刻を、ローカルの基準時刻としてそのまま採用
   if (data.updatedAt) localStorage.setItem('cf-local-updated-at', String(data.updatedAt));
@@ -3579,7 +3695,7 @@ if ('serviceWorker' in navigator) {
   }
 
   // localStorageへの書き込みを監視して自動的にクラウド同期をスケジュール
-  const SYNCED_KEYS = ['cf-manager-v1', 'cf-balance-v1', 'cf-budget-v1', 'cf-level-v1', 'cf-unpaid-v1', 'cf-templates-v1', 'cf-goals-v1'];
+  const SYNCED_KEYS = ['cf-manager-v1', 'cf-balance-v1', 'cf-budget-v1', 'cf-level-v1', 'cf-unpaid-v1', 'cf-templates-v1', 'cf-goals-v1', 'cf-allocation-v1'];
   const origSetItem = localStorage.setItem.bind(localStorage);
   localStorage.setItem = function(key, value) {
     origSetItem(key, value);
