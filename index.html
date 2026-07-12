@@ -2241,31 +2241,39 @@ function updateAccountSelects() {
     ? b.cards.map(c => `<option value="card-${c.id}">💳 ${c.name}</option>`).join('')
     : '';
 
-  // 収入の入金先：口座のみ
+  // 収入の入金先：口座のみ（選択中の値を保持する）
   const incOpts = b.accounts.length
     ? b.accounts.map(a => `<option value="acc-${a.id}">${a.name}（${fmt(a.balance)}）</option>`).join('')
     : '<option value="" disabled>口座を登録してください</option>';
   ['p-inc-account','b-inc-account'].forEach(id => {
     const el = document.getElementById(id);
-    if (el) el.innerHTML = incOpts;
+    if (el) {
+      const v = el.value;
+      el.innerHTML = incOpts;
+      if ([...el.options].some(o => o.value === v)) el.value = v;
+    }
   });
 
-  // 支出の支払い方法：口座直接 or クレカ
+  // 支出の支払い方法：口座直接 or クレカ（選択中の値を保持する）
   const expOpts = (accOpts || cardOpts)
     ? `${accOpts ? `<optgroup label="🏦 口座直接">${accOpts}</optgroup>` : ''}${cardOpts ? `<optgroup label="💳 クレジットカード">${cardOpts}</optgroup>` : ''}`
     : '<option value="" disabled>口座・カードを登録してください</option>';
   ['p-exp-account','b-exp-account'].forEach(id => {
     const el = document.getElementById(id);
-    if (el) el.innerHTML = expOpts;
+    if (el) {
+      const v = el.value;
+      el.innerHTML = expOpts;
+      if ([...el.options].some(o => o.value === v)) el.value = v;
+    }
   });
 
-  // 未払い一覧の支払い元口座（値はプレーンな口座IDを使用）
+  // 未払い一覧の支払い元口座（値はプレーンな口座IDを使用、選択中の値を保持する）
   const unpaidAccEl = document.getElementById('unpaid-account');
   if (unpaidAccEl) {
     const v = unpaidAccEl.value;
     const plainOpts = b.accounts.map(a => `<option value="${a.id}">${a.name}（${fmt(a.balance)}）</option>`).join('');
     unpaidAccEl.innerHTML = '<option value="">未指定（残高に反映しない）</option>' + plainOpts;
-    unpaidAccEl.value = v;
+    if ([...unpaidAccEl.options].some(o => o.value === v)) unpaidAccEl.value = v;
   }
 }
 
