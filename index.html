@@ -769,11 +769,13 @@ select option { background: #0d0d35; }
     <!-- ローン・借金 -->
     <div class="card">
       <div class="card-title">ローン・借金</div>
-      <div class="form-grid" style="grid-template-columns:1.2fr 1fr 1fr 1fr auto;gap:8px;align-items:end;margin-bottom:12px">
+      <p style="font-size:11px;color:var(--text-hint);margin-bottom:10px">「今まさに借りたお金」を入金先口座に反映したい場合は、下の「入金先口座」を選んでください（すでにある借金を記録するだけなら「未指定」でOK）</p>
+      <div class="form-grid" style="grid-template-columns:1.2fr 1fr 1fr 1fr 1fr auto;gap:8px;align-items:end;margin-bottom:12px">
         <div class="field"><label>名称</label><input id="loan-name" placeholder="奨学金、カーローンなど"></div>
-        <div class="field"><label>残高（円）</label><input id="loan-balance" type="number" placeholder="1000000"></div>
+        <div class="field"><label>借入額・残高（円）</label><input id="loan-balance" type="number" placeholder="1000000"></div>
         <div class="field"><label>月返済額（円）</label><input id="loan-monthly" type="number" placeholder="30000"></div>
         <div class="field"><label>返済日</label><input id="loan-day" type="number" min="1" max="31" placeholder="25"></div>
+        <div class="field"><label>入金先口座</label><select id="loan-deposit-account"><option value="">未指定（残高に反映しない）</option></select></div>
         <button class="add-btn red" onclick="addLoan()" title="追加">+</button>
       </div>
       <div class="entry-list" id="loan-list"></div>
@@ -1360,9 +1362,31 @@ function markUnpaidDone(id) {
     if (acc) { acc.balance -= item.amount; saveBalance(b); balanceApplied = true; }
   }
   saveUnpaid(list.filter(u => u.id !== id));
+
+  // 家計に支出記録として追加する（今日の日付で）
+  const catIcon = { 'クレジットカード':'💳', 'ローン・借金':'📋', '公共料金':'💡', 'その他':'📝' };
+  const newEntry = {
+    id: Date.now() + 1,
+    date: getTodayKey(),
+    name: item.linkName ? `${item.name}（${item.linkName}）` : item.name,
+    amount: item.amount,
+    type: 'expense',
+    cat: 'その他',
+    paid: true
+  };
+  if (item.accountId) {
+    newEntry.accountId = item.accountId;
+    newEntry.accountName = item.accountName;
+    newEntry.balanceApplied = true; // 上ですでに残高へ反映済みのため
+  }
+  const { month, year } = state.personal;
+  const pEntries = getEntries('personal', year, month);
+  pEntries.unshift(newEntry);
+  setEntries('personal', year, month, pEntries);
+
   renderAll();
 
-  showUndoToast(`「${item.name}」を支払い済みにしました`, () => {
+  showUndoToast(`「${item.name}」を支払い済みにして家計に記録しました`, () => {
     const curList = loadUnpaid();
     curList.push(item);
     saveUnpaid(curList);
@@ -1371,6 +1395,9 @@ function markUnpaidDone(id) {
       const acc = b.accounts.find(a => a.id === item.accountId);
       if (acc) { acc.balance += item.amount; saveBalance(b); }
     }
+    // 追加した家計の記録も取り消す
+    const curPEntries = getEntries('personal', year, month).filter(e => e.id !== newEntry.id);
+    setEntries('personal', year, month, curPEntries);
     renderAll();
   });
 }
@@ -3164,11 +3191,19 @@ function updateAccountSelects() {
 
   // 未払い一覧の支払い元口座（値はプレーンな口座IDを使用、選択中の値を保持する）
   const unpaidAccEl = document.getElementById('unpaid-account');
+  const plainOpts = b.accounts.map(a => `<option value="${a.id}">${a.name}（${fmt(a.balance)}）</option>`).join('');
   if (unpaidAccEl) {
     const v = unpaidAccEl.value;
-    const plainOpts = b.accounts.map(a => `<option value="${a.id}">${a.name}（${fmt(a.balance)}）</option>`).join('');
     unpaidAccEl.innerHTML = '<option value="">未指定（残高に反映しない）</option>' + plainOpts;
     if ([...unpaidAccEl.options].some(o => o.value === v)) unpaidAccEl.value = v;
+  }
+
+  // ローン借入時の入金先口座（同じくプレーンな口座IDを使用）
+  const loanDepositEl = document.getElementById('loan-deposit-account');
+  if (loanDepositEl) {
+    const v = loanDepositEl.value;
+    loanDepositEl.innerHTML = '<option value="">未指定（残高に反映しない）</option>' + plainOpts;
+    if ([...loanDepositEl.options].some(o => o.value === v)) loanDepositEl.value = v;
   }
 }
 
@@ -3283,11 +3318,20 @@ function addLoan() {
   if (!name || isNaN(balance) || isNaN(monthly) || isNaN(day)) return;
   const b = loadBalance();
   b.loans.push({ id: Date.now(), name, balance, monthly, day });
+
+  // 入金先口座が指定されていれば、借りたお金をその口座残高に反映する
+  const depositEl = document.getElementById('loan-deposit-account');
+  if (depositEl && depositEl.value) {
+    const acc = b.accounts.find(a => a.id === parseInt(depositEl.value));
+    if (acc) acc.balance += balance;
+  }
+
   saveBalance(b);
   document.getElementById('loan-name').value = '';
   document.getElementById('loan-balance').value = '';
   document.getElementById('loan-monthly').value = '';
   document.getElementById('loan-day').value = '';
+  if (depositEl) depositEl.value = '';
   renderBalance();
 }
 
