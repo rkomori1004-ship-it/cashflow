@@ -407,6 +407,32 @@ select option { background: #0d0d35; }
 .progress-wrap { margin-bottom: 14px; }
 .progress-label { display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 5px; }
 .progress-bar-bg { background: #0a0a2a; border: 2px solid var(--border); height: 14px; overflow: hidden; }
+
+/* メイン目標ゲージバナー */
+.main-gauge-banner {
+  max-width: 860px; margin: 0 auto 16px; padding: 14px 20px;
+  background: linear-gradient(135deg, #1a1500 0%, #0a0a2a 100%);
+  border: 3px solid var(--gold); font-family: 'DotGothic16', monospace;
+}
+.main-gauge-title { font-size: 11px; color: var(--gold); letter-spacing: 1px; margin-bottom: 8px; }
+.main-gauge-ascii {
+  font-family: 'DM Mono', monospace; font-size: 13px; line-height: 1.6;
+  color: var(--gold); white-space: pre; overflow-x: auto;
+}
+.main-gauge-numbers { font-size: 15px; color: #fff; margin: 4px 0; font-family: var(--mono); }
+.main-gauge-remaining { font-size: 12px; color: var(--text-muted); }
+.main-gauge-projection {
+  margin-top: 10px; padding-top: 10px; border-top: 2px solid var(--border);
+  font-size: 12px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 6px;
+}
+.gauge-scenario-toggle {
+  display: flex; align-items: center; gap: 6px; font-size: 11px;
+  padding: 4px 8px; border: 1px solid var(--border); cursor: pointer;
+  background: #0d0d35; color: var(--text-muted);
+}
+.gauge-scenario-toggle.on { border-color: var(--green); color: var(--green); background: #001a0d; }
+.gauge-scenario-toggle input { width: 14px; height: 14px; accent-color: var(--green); }
+
 .progress-bar { height: 10px; margin: 2px; transition: width 0.4s; }
 .progress-bar.ok { background: var(--green); box-shadow: 0 0 6px rgba(68,255,136,0.5); }
 .progress-bar.warn { background: var(--gold); box-shadow: 0 0 6px rgba(255,220,68,0.5); }
@@ -516,6 +542,8 @@ select option { background: #0d0d35; }
       <button class="sub-menu-btn" onclick="toggleSubMenu()" title="メニュー" id="sub-menu-toggle">☰</button>
     </div>
   </header>
+
+  <div id="main-goal-gauge"></div>
 
   <!-- サブメニュー -->
   <div id="sub-menu" class="sub-menu">
@@ -1080,6 +1108,22 @@ select option { background: #0d0d35; }
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script>
+// ---- Base64URL（UTF-8安全）のエンコード・デコード ----
+function utf8ToBase64Url(str) {
+  const bytes = new TextEncoder().encode(str);
+  let binary = '';
+  bytes.forEach(b => { binary += String.fromCharCode(b); });
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+function base64UrlToUtf8(b64url) {
+  let base64 = b64url.replace(/-/g, '+').replace(/_/g, '/');
+  while (base64.length % 4) base64 += '=';
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return new TextDecoder().decode(bytes);
+}
+
 // ---- 共有リンクモード：?share=... がある場合は、通常のアプリ起動をせず閲覧用画面を表示する ----
 (function checkShareMode() {
   const params = new URLSearchParams(location.search);
@@ -1088,7 +1132,7 @@ select option { background: #0d0d35; }
 
   let text = '';
   try {
-    text = decodeURIComponent(escape(atob(shared)));
+    text = base64UrlToUtf8(shared);
   } catch(e) {
     text = '（共有データの読み込みに失敗しました。URLが正しいかご確認ください）';
   }
@@ -2525,8 +2569,7 @@ function copyForAI() {
 // ---- 共有リンク（URLだけで内容が見られる） ----
 function copyShareLink() {
   const text = buildAIConsultText();
-  // UTF-8安全なBase64エンコード
-  const encoded = btoa(unescape(encodeURIComponent(text)));
+  const encoded = utf8ToBase64Url(text);
   const url = `${location.origin}${location.pathname}?share=${encoded}`;
   navigator.clipboard.writeText(url).then(() => {
     alert('共有リンクをコピーしました！\nこのURLを開くと、ChatGPTなど誰でも今月のデータを見られます（ログイン不要）。\n※合言葉や個人情報は含まれていないので、送る相手は選んでください。');
@@ -2890,10 +2933,36 @@ function renderGoals() {
         deadlineText = `<div style="font-size:11px;color:var(--red);margin-top:4px">⚠ 期限を過ぎています</div>`;
       }
     }
+
+    const scenarios = g.scenarios || [];
+    const scenarioHTML = g.isMain ? `
+      <div style="margin-top:12px;border-top:2px solid var(--border);padding-top:10px">
+        <div style="font-size:11px;color:var(--mp);margin-bottom:6px">月々の基本ペース（円）</div>
+        <div style="display:flex;gap:8px;margin-bottom:10px">
+          <input type="number" value="${g.baseMonthlyPace||0}" placeholder="0" style="flex:1" onchange="setGoalBasePace(${g.id}, this.value)">
+        </div>
+        <div style="font-size:11px;color:var(--mp);margin-bottom:6px">シナリオ（ON/OFFで到達予測に反映）</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">
+          ${scenarios.map(s => `
+            <label class="gauge-scenario-toggle ${s.on?'on':''}">
+              <input type="checkbox" ${s.on?'checked':''} onchange="toggleScenario(${g.id},${s.id})">
+              ${s.name}（${s.amount>=0?'+':''}${fmt(s.amount)}/月）
+              <span onclick="event.preventDefault();deleteScenario(${g.id},${s.id})" style="cursor:pointer;color:var(--red);margin-left:4px">×</span>
+            </label>`).join('')}
+        </div>
+        <div style="display:flex;gap:6px">
+          <input id="scenario-name-${g.id}" placeholder="シナリオ名" style="flex:1.2">
+          <input id="scenario-amount-${g.id}" type="number" placeholder="+50000" style="flex:1">
+          <button class="add-btn green" style="width:36px;height:36px" onclick="addScenario(${g.id})">+</button>
+        </div>
+      </div>` : `
+      <button class="csv-btn" style="margin-top:10px;font-size:11px;padding:6px 10px" onclick="setMainGoal(${g.id})">⭐ このゲージをトップに表示する</button>
+    `;
+
     return `
-      <div class="card" style="margin-bottom:10px;padding:14px 16px">
+      <div class="card" style="margin-bottom:10px;padding:14px 16px;${g.isMain?'border-color:var(--gold)':''}">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-          <span style="font-size:13px;color:var(--text)">${g.name}</span>
+          <span style="font-size:13px;color:var(--text)">${g.isMain?'⭐ ':''}${g.name}</span>
           <button class="del-btn" onclick="deleteGoal(${g.id})" title="削除">×</button>
         </div>
         <div class="progress-label">
@@ -2902,8 +2971,111 @@ function renderGoals() {
         <div class="progress-bar-bg"><div class="progress-bar ${pct>=100?'ok':'warn'}" style="width:${pct}%"></div></div>
         ${deadlineText}
         <button class="csv-btn" style="margin-top:10px;font-size:11px;padding:6px 10px" onclick="addGoalProgress(${g.id})">＋ 積み立てを記録</button>
+        ${scenarioHTML}
       </div>`;
   }).join('');
+
+  renderMainGoalGauge();
+}
+
+function setMainGoal(id) {
+  const list = loadGoals();
+  list.forEach(g => { g.isMain = (g.id === id); });
+  saveGoals(list);
+  renderGoals();
+}
+
+function setGoalBasePace(id, value) {
+  const list = loadGoals();
+  const g = list.find(x => x.id === id);
+  if (g) { g.baseMonthlyPace = parseFloat(value) || 0; saveGoals(list); }
+  renderMainGoalGauge();
+}
+
+function addScenario(goalId) {
+  const nameEl = document.getElementById(`scenario-name-${goalId}`);
+  const amountEl = document.getElementById(`scenario-amount-${goalId}`);
+  const name = nameEl.value.trim();
+  const amount = parseFloat(amountEl.value);
+  if (!name || isNaN(amount)) return;
+  const list = loadGoals();
+  const g = list.find(x => x.id === goalId);
+  if (g) {
+    if (!g.scenarios) g.scenarios = [];
+    g.scenarios.push({ id: Date.now(), name, amount, on: false });
+    saveGoals(list);
+  }
+  renderGoals();
+}
+
+function toggleScenario(goalId, scenarioId) {
+  const list = loadGoals();
+  const g = list.find(x => x.id === goalId);
+  if (g && g.scenarios) {
+    const s = g.scenarios.find(sc => sc.id === scenarioId);
+    if (s) s.on = !s.on;
+    saveGoals(list);
+  }
+  renderGoals();
+}
+
+function deleteScenario(goalId, scenarioId) {
+  const list = loadGoals();
+  const g = list.find(x => x.id === goalId);
+  if (g && g.scenarios) {
+    g.scenarios = g.scenarios.filter(sc => sc.id !== scenarioId);
+    saveGoals(list);
+  }
+  renderGoals();
+}
+
+// ---- メイン目標ゲージ（ドット絵風・画面上部に常時表示） ----
+function renderMainGoalGauge() {
+  const el = document.getElementById('main-goal-gauge');
+  if (!el) return;
+  const list = loadGoals();
+  const g = list.find(x => x.isMain);
+  if (!g) { el.innerHTML = ''; return; }
+
+  const pct = Math.min(g.current / g.target, 1);
+  const barLen = 20;
+  const filled = Math.round(pct * barLen);
+  const bar = '█'.repeat(filled) + '░'.repeat(barLen - filled);
+  const remaining = Math.max(g.target - g.current, 0);
+
+  const scenarios = g.scenarios || [];
+  const activeBonus = scenarios.filter(s => s.on).reduce((s,sc) => s + sc.amount, 0);
+  const totalPace = (g.baseMonthlyPace || 0) + activeBonus;
+
+  let projectionHTML = '';
+  if (totalPace > 0 && remaining > 0) {
+    const monthsNeeded = Math.ceil(remaining / totalPace);
+    const projDate = new Date(); projDate.setMonth(projDate.getMonth() + monthsNeeded);
+    let deadlineCompare = '';
+    if (g.deadline) {
+      const [dy, dm] = g.deadline.split('-').map(Number);
+      const deadlineDate = new Date(dy, dm - 1, 1);
+      const onTime = projDate <= deadlineDate;
+      deadlineCompare = `<span style="color:${onTime?'var(--green)':'var(--red)'}">${onTime?'✓ 期限内に到達見込み':'⚠ 期限に間に合わない見込み'}</span>`;
+    }
+    projectionHTML = `
+      <div class="main-gauge-projection">
+        <span>月${fmt(totalPace)}ペースなら → <strong style="color:var(--gold)">${projDate.getFullYear()}年${projDate.getMonth()+1}月ごろ到達</strong></span>
+        ${deadlineCompare}
+      </div>`;
+  } else if (remaining <= 0) {
+    projectionHTML = `<div class="main-gauge-projection"><span style="color:var(--green)">🎉 目標達成済みです！</span></div>`;
+  }
+
+  el.innerHTML = `
+    <div class="main-gauge-banner">
+      <div class="main-gauge-title">━━━━━━━━━━━━━━<br>${g.name}</div>
+      <div class="main-gauge-ascii">${bar}</div>
+      <div class="main-gauge-numbers">${fmt(g.current)} / ${fmt(g.target)}</div>
+      <div class="main-gauge-remaining">あと${fmt(remaining)}　━━━━━━━━━━━━━━</div>
+      ${projectionHTML}
+    </div>
+  `;
 }
 
 function progressHTML(label, current, target, isExpense=false) {
