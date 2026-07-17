@@ -858,7 +858,9 @@ select option { background: #0d0d35; }
       <div id="ai-review"></div>
       <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
         <button class="csv-btn" onclick="copyForAI()">📋 AIに相談する用のテキストをコピー</button>
+        <button class="csv-btn" onclick="copyShareLink()" style="border-color:var(--mp);color:var(--mp)">🔗 共有リンクをコピー</button>
       </div>
+      <div style="font-size:10px;color:var(--text-hint);margin-top:8px">※共有リンクはURLを開くだけで誰でも閲覧できます。合言葉やパスワードは含まれていませんが、送る相手にはご注意ください</div>
     </div>
     <div class="card">
       <div class="card-title">週次サマリー（総合）</div>
@@ -1078,6 +1080,31 @@ select option { background: #0d0d35; }
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script>
+// ---- 共有リンクモード：?share=... がある場合は、通常のアプリ起動をせず閲覧用画面を表示する ----
+(function checkShareMode() {
+  const params = new URLSearchParams(location.search);
+  const shared = params.get('share');
+  if (!shared) return;
+
+  let text = '';
+  try {
+    text = decodeURIComponent(escape(atob(shared)));
+  } catch(e) {
+    text = '（共有データの読み込みに失敗しました。URLが正しいかご確認ください）';
+  }
+
+  document.title = 'キャッシュフロー共有ビュー';
+  document.body.innerHTML = `
+    <div style="max-width:640px;margin:0 auto;padding:32px 20px;font-family:'DotGothic16',monospace;background:#0a0a1a;min-height:100vh;color:#fff;box-sizing:border-box">
+      <div style="font-size:14px;color:#ffdd44;margin-bottom:6px">🪙 キャッシュフロー管理 — 共有ビュー</div>
+      <div style="font-size:11px;color:#6666aa;margin-bottom:20px">このリンクは閲覧専用です。ログインや合言葉は不要です。</div>
+      <pre style="background:#1a1a6e;border:3px solid #aaaaff;padding:18px;white-space:pre-wrap;word-break:break-word;font-size:13px;line-height:1.8;color:#fff;font-family:'DotGothic16',monospace">${text.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</pre>
+    </div>
+  `;
+  // 通常のアプリ初期化を止めるため、この後のスクリプトを止める
+  throw new Error('SHARE_MODE_STOP');
+})();
+
 const MONTHS = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
 const now = new Date();
 
@@ -2443,7 +2470,7 @@ function renderAIReview(ctx) {
   `;
 }
 
-function copyForAI() {
+function buildAIConsultText() {
   const { month, year } = state.personal;
   const pE = getEntries('personal', year, month).filter(e=>e.type==='expense');
   const bE = getEntries('business', year, month).filter(e=>e.type==='expense');
@@ -2464,7 +2491,7 @@ function copyForAI() {
     : '  （未払いなし）';
   const unpaidTotal = unpaidItems.reduce((s,u)=>s+u.amount,0);
 
-  const text = `${year}年${month+1}月の家計・収支データです。使いすぎているものがあれば具体的に指摘して、来月に向けたアドバイスをください。
+  return `${year}年${month+1}月の家計・収支データです。使いすぎているものがあれば具体的に指摘して、来月に向けたアドバイスをください。
 
 【収入】
 家計収入: ¥${pInc.toLocaleString()}
@@ -2484,11 +2511,27 @@ ${catLines(bCats)}
 【未払い一覧（クレカ・ローン・公共料金など、まだ払っていないもの）】
 ${unpaidLines}
 未払い合計: ¥${unpaidTotal.toLocaleString()}`;
+}
 
+function copyForAI() {
+  const text = buildAIConsultText();
   navigator.clipboard.writeText(text).then(() => {
     alert('コピーしました！ClaudeやChatGPTに貼り付けて相談してみてください。');
   }).catch(() => {
     alert('コピーに失敗しました。ブラウザの権限設定をご確認ください。');
+  });
+}
+
+// ---- 共有リンク（URLだけで内容が見られる） ----
+function copyShareLink() {
+  const text = buildAIConsultText();
+  // UTF-8安全なBase64エンコード
+  const encoded = btoa(unescape(encodeURIComponent(text)));
+  const url = `${location.origin}${location.pathname}?share=${encoded}`;
+  navigator.clipboard.writeText(url).then(() => {
+    alert('共有リンクをコピーしました！\nこのURLを開くと、ChatGPTなど誰でも今月のデータを見られます（ログイン不要）。\n※合言葉や個人情報は含まれていないので、送る相手は選んでください。');
+  }).catch(() => {
+    prompt('コピーに失敗しました。以下のURLを手動でコピーしてください：', url);
   });
 }
 
@@ -3614,6 +3657,11 @@ if ('serviceWorker' in navigator) {
 </script>
 
 <script type="module">
+  // 共有ビューモードの時は、Firebase等の初期化を一切行わない
+  if (new URLSearchParams(location.search).get('share')) {
+    throw new Error('SHARE_MODE_STOP');
+  }
+
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
   import { getFirestore, doc, setDoc, getDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
