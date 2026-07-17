@@ -14,6 +14,7 @@
 <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png">
 <link rel="apple-touch-icon" href="icon-192.png">
 <link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Press+Start+2P&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.5.0/lz-string.min.js"></script>
 <style>
 /* ===== DQ THEME ===== */
 :root {
@@ -1108,22 +1109,6 @@ select option { background: #0d0d35; }
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script>
-// ---- Base64URL（UTF-8安全）のエンコード・デコード ----
-function utf8ToBase64Url(str) {
-  const bytes = new TextEncoder().encode(str);
-  let binary = '';
-  bytes.forEach(b => { binary += String.fromCharCode(b); });
-  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
-function base64UrlToUtf8(b64url) {
-  let base64 = b64url.replace(/-/g, '+').replace(/_/g, '/');
-  while (base64.length % 4) base64 += '=';
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  return new TextDecoder().decode(bytes);
-}
-
 // ---- 共有リンクモード：?share=... がある場合は、通常のアプリ起動をせず閲覧用画面を表示する ----
 (function checkShareMode() {
   const params = new URLSearchParams(location.search);
@@ -1132,7 +1117,8 @@ function base64UrlToUtf8(b64url) {
 
   let text = '';
   try {
-    text = base64UrlToUtf8(shared);
+    text = LZString.decompressFromEncodedURIComponent(shared);
+    if (text === null || text === '') throw new Error('decompress failed');
   } catch(e) {
     text = '（共有データの読み込みに失敗しました。URLが正しいかご確認ください）';
   }
@@ -2569,7 +2555,7 @@ function copyForAI() {
 // ---- 共有リンク（URLだけで内容が見られる） ----
 function copyShareLink() {
   const text = buildAIConsultText();
-  const encoded = utf8ToBase64Url(text);
+  const encoded = LZString.compressToEncodedURIComponent(text);
   const url = `${location.origin}${location.pathname}?share=${encoded}`;
   navigator.clipboard.writeText(url).then(() => {
     alert('共有リンクをコピーしました！\nこのURLを開くと、ChatGPTなど誰でも今月のデータを見られます（ログイン不要）。\n※合言葉や個人情報は含まれていないので、送る相手は選んでください。');
